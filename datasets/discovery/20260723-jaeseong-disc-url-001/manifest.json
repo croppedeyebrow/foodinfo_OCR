@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260723-jaeseong-disc-url-001",
+  "source_site": "KURLY",
+  "source_mode": "URL_LIST",
+  "source_value": "product_urls.txt",
+  "requested_url": "/data/input/product_urls.txt",
+  "max_products": null,
+  "max_scrolls": null,
+  "discovered_count": 1,
+  "duplicate_count": 0,
+  "stop_reason": null,
+  "started_at": "2026-07-23T23:49:53.908103+09:00",
+  "finished_at": "2026-07-23T23:49:53.910713+09:00",
+  "status": "COMPLETED"
+}

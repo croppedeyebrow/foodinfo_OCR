@@ -1,0 +1,2 @@
+﻿schema_version,batch_id,source_site,source_mode,source_value,original_product_id,product_name_preview,product_url,discovery_order,discovered_at,discovery_status
+1.0,20260723-jaeseong-disc-url-001,KURLY,URL_LIST,product_urls.txt,5047857,,https://www.kurly.com/goods/5047857,1,2026-07-23T23:49:53.910581+09:00,DISCOVERED

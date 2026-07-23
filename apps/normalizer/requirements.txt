@@ -1,0 +1,5 @@
+psycopg[binary]==3.2.9
+pydantic==2.11.7
+jsonschema==4.25.0
+typer==0.16.0
+rich==14.0.0

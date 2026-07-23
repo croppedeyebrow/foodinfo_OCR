@@ -1,0 +1,6 @@
+﻿batch_id,source_site,original_product_id,product_name,product_url,image_path,error_code,error_message,failed_at
+20260723-jaeseong-test-001,KURLY,1001458646,"[골라담기] 일상味소 국내산 소고기 요리용 8종, 택1",https://www.kurly.com/goods/1001458646,detail_images/1001458646_07_a50177767f6f.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-07-24T00:01:25.066539+09:00
+20260723-jaeseong-test-001,KURLY,1001458646,"[골라담기] 일상味소 국내산 소고기 요리용 8종, 택1",https://www.kurly.com/goods/1001458646,detail_images/1001458646_08_3be06200fe92.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-07-24T00:01:26.500984+09:00
+20260723-jaeseong-test-001,KURLY,5055615,[이목] 국내산 소고기 절단 국거리용 200g(냉장),https://www.kurly.com/goods/5055615,detail_images/5055615_01_bc2771a84865.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-07-24T00:02:11.823740+09:00
+20260723-jaeseong-test-001,KURLY,1000678620,[Kim's butcher] 호주산 목초 홍두깨 200g (육전용),https://www.kurly.com/goods/1000678620,detail_images/1000678620_01_98f084d8acce.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-07-24T00:02:31.758315+09:00
+20260723-jaeseong-test-001,KURLY,5054443,[이목 무항생제] 국내산 소고기 채끝 구이용 200g (냉장),https://www.kurly.com/goods/5054443,detail_images/5054443_01_1a7c69691cc2.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-07-24T00:02:51.730518+09:00

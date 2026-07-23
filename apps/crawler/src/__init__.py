@@ -1,0 +1,1 @@
+"""Kurly detail page crawler."""

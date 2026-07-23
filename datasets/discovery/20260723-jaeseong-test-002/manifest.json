@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260723-jaeseong-test-002",
+  "source_site": "KURLY",
+  "source_mode": "CATEGORY",
+  "source_value": "910",
+  "requested_url": "https://www.kurly.com/categories/910",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-07-23T23:50:02.456837+09:00",
+  "finished_at": "2026-07-23T23:50:04.637593+09:00",
+  "status": "COMPLETED"
+}

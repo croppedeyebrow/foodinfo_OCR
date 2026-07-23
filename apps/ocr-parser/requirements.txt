@@ -1,0 +1,9 @@
+paddleocr
+opencv-python-headless==4.11.0.86
+Pillow==11.3.0
+numpy
+pydantic==2.11.7
+jsonschema==4.25.0
+typer==0.16.0
+rich==14.0.0
+pytest==8.4.1

@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260723-jaeseong-test-001",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "육류",
+  "requested_url": "https://www.kurly.com/search?sword=%EC%9C%A1%EB%A5%98",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-07-23T23:49:57.142115+09:00",
+  "finished_at": "2026-07-23T23:50:00.268627+09:00",
+  "status": "COMPLETED"
+}

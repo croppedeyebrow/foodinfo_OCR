@@ -1,0 +1,6 @@
+﻿schema_version,batch_id,source_site,source_mode,source_value,original_product_id,product_name_preview,product_url,discovery_order,discovered_at,discovery_status
+1.0,20260723-jaeseong-test-001,KURLY,SEARCH,육류,1001458646,"담기 샛별배송 [골라담기] 일상味소 국내산 소고기 요리용 8종, 택1 8,960원~ 9,999+ Kurly Only",https://www.kurly.com/goods/1001458646,1,2026-07-23T23:50:00.267843+09:00,DISCOVERED
+1.0,20260723-jaeseong-test-001,KURLY,SEARCH,육류,5047857,"멤버스특가 담기 샛별배송 [델리치오] 호주산 소고기 목초육 안심 스테이크 250g (냉장) 24,750원 31%16,990원~ 9,999+ Kurly Only",https://www.kurly.com/goods/5047857,2,2026-07-23T23:50:00.267939+09:00,DISCOVERED
+1.0,20260723-jaeseong-test-001,KURLY,SEARCH,육류,5055615,"담기 샛별배송 [이목] 국내산 소고기 절단 국거리용 200g(냉장) 간편하게 쓰기 좋은 세절 국거리 10,670원 20%8,530원 9,999+ Kurly Only",https://www.kurly.com/goods/5055615,3,2026-07-23T23:50:00.267950+09:00,DISCOVERED
+1.0,20260723-jaeseong-test-001,KURLY,SEARCH,육류,1000678620,"+최대15%쿠폰 담기 샛별배송 [Kim's butcher] 호주산 목초 홍두깨 200g (육전용) 육전 요리에 간편하게 활용 8,500원 999+ Kurly Only",https://www.kurly.com/goods/1000678620,4,2026-07-23T23:50:00.267964+09:00,DISCOVERED
+1.0,20260723-jaeseong-test-001,KURLY,SEARCH,육류,5054443,"담기 샛별배송 [이목 무항생제] 국내산 소고기 채끝 구이용 200g (냉장) 그릴에, 팬에 구워 먹는 채끝 19,870원 20%15,890원 999+ Kurly Only",https://www.kurly.com/goods/5054443,5,2026-07-23T23:50:00.267974+09:00,DISCOVERED
