@@ -31,17 +31,29 @@ docker compose build crawler
 docker compose build ocr-parser
 ```
 
-환경변수는 `.env`를 사용합니다. 예시:
+### 환경변수 (팀원별 `.env`)
+
+`.env`는 Git에 올리지 않습니다(비밀번호·개인 설정).  
+대신 **템플릿인 `.env.example`만 공유**하고, 각자 로컬에서 복사해 씁니다.
+
+```cmd
+copy .env.example .env
+```
+
+그다음 `.env`에서 자기 이름만 바꿉니다.
 
 ```dotenv
 BATCH_MEMBER=jaeseong
-OUTCOME_ROOT=/outcome
-CRAWLER_REQUEST_INTERVAL_SECONDS=2.0
-CRAWLER_TIMEOUT_SECONDS=30
-CRAWLER_MAX_RETRIES=3
-CRAWLER_HEADLESS=true
-PARSER_VERSION=0.2.0
 ```
+
+| 팀원 | `BATCH_MEMBER` 값 | 결과 저장 위치 |
+|---|---|---|
+| 재성 | `jaeseong` | `outcome/jaeseong/` |
+| 선영 | `sunyeong` | `outcome/sunyeong/` |
+| 우희 | `woohee` | `outcome/woohee/` |
+
+공통 설정(타임아웃, OCR 버전 등)은 `.env.example`에 두고, 개인 값만 `.env`에서 수정하면 됩니다.  
+`.env.example`을 변경하면 PR로 공유하고, 팀원은 필요 시 자기 `.env`에 반영합니다.
 
 컨테이너 상태 확인:
 
