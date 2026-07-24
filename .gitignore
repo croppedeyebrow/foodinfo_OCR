@@ -16,6 +16,7 @@ datasets/ocr_raw/*
 datasets/ocr_output/*
 datasets/crawl_raw/*
 datasets/detail_images/*
+datasets/input/crawled_products.csv
 
 !datasets/images/.gitkeep
 !datasets/html/.gitkeep

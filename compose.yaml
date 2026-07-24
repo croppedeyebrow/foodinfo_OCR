@@ -19,6 +19,8 @@ services:
     build:
       context: .
       dockerfile: docker/ocr-parser.Dockerfile
+    shm_size: "2gb"
+    platform: linux/amd64
     env_file:
       - .env
     volumes:
