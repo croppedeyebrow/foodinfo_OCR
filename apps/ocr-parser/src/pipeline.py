@@ -35,7 +35,7 @@ class ProductOcrPipeline:
         self.parser_version = parser_version
         self.language = language
         self._engine: PaddleOcrEngine | None = None
-        self._seen_keys: set[str] | None = None
+        self._seen_keys_by_batch: dict[str, set[str]] = {}
 
     @property
     def engine(self) -> PaddleOcrEngine:
@@ -43,14 +43,17 @@ class ProductOcrPipeline:
             self._engine = PaddleOcrEngine(language=self.language)
         return self._engine
 
+    def _keys_for_batch(self, batch_id: str, csv_path: Path) -> set[str]:
+        if batch_id not in self._seen_keys_by_batch:
+            self._seen_keys_by_batch[batch_id] = load_existing_source_keys(csv_path)
+        return self._seen_keys_by_batch[batch_id]
+
     def process(self, product: ProductInput, data_root: Path) -> tuple[Path | None, Path]:
         outcome_root = Path(os.getenv("OUTCOME_ROOT", "/outcome"))
         member = os.getenv("BATCH_MEMBER", "unknown")
         batch_dir = outcome_root / member / product.batch_id
         csv_path = batch_dir / "products.csv"
-
-        if self._seen_keys is None:
-            self._seen_keys = load_existing_source_keys(csv_path)
+        self._keys_for_batch(product.batch_id, csv_path)
 
         has_image = bool(product.image_path and str(product.image_path).strip())
         if has_image:
@@ -62,8 +65,9 @@ class ProductOcrPipeline:
         product: ProductInput,
         csv_path: Path,
     ) -> tuple[Path | None, Path]:
+        seen = self._keys_for_batch(product.batch_id, csv_path)
         dedupe_key = build_dedupe_key(product.source_site, product.original_product_id)
-        if dedupe_key in (self._seen_keys or set()):
+        if dedupe_key in seen:
             return None, csv_path
 
         food_type = merge_field(None, None)
@@ -93,7 +97,7 @@ class ProductOcrPipeline:
             parse_status=parse_status,
         )
         append_product_csv(record, csv_path)
-        self._seen_keys = (self._seen_keys or set()) | {dedupe_key}
+        seen.add(dedupe_key)
         return None, csv_path
 
     def _process_with_image(
@@ -117,9 +121,8 @@ class ProductOcrPipeline:
             product.original_product_id,
             image_hash,
         )
-        if dedupe_key in (self._seen_keys or set()) or source_record_id in (
-            self._seen_keys or set()
-        ):
+        seen = self._keys_for_batch(product.batch_id, csv_path)
+        if dedupe_key in seen or source_record_id in seen:
             return None, csv_path
 
         collected_at = datetime.now(KST)
@@ -127,7 +130,6 @@ class ProductOcrPipeline:
         if not ocr_result.full_text.strip():
             raise ValueError("OCR_TEXT_EMPTY")
 
-        # 고시 키워드가 없으면 스킵(원문 JSON은 남김)
         raw_record = RawOcrRecord(
             source_record_id=source_record_id,
             source_site=product.source_site,
@@ -151,17 +153,14 @@ class ProductOcrPipeline:
         raw_path = write_raw_json(raw_record, data_root / "ocr_raw")
 
         if not _has_target_fields(ocr_result.full_text):
-            self._seen_keys = (self._seen_keys or set()) | {
-                dedupe_key,
-                source_record_id,
-            }
-            # DOM 값이 있으면 DOM 병합 결과를 남기고, 없으면 SKIPPED_NO_TARGET_FIELD
+            seen.add(dedupe_key)
+            seen.add(source_record_id)
             if product.expiration_info_dom or product.storage_method_dom:
                 product_key = build_dedupe_key(
                     product.source_site,
                     product.original_product_id,
                 )
-                if product_key not in (self._seen_keys or set()):
+                if product_key not in seen:
                     _, csv_path = self._process_dom_only(product, csv_path)
             return raw_path, csv_path
 
@@ -198,7 +197,8 @@ class ProductOcrPipeline:
             parse_status=parse_status,
         )
         append_product_csv(record, csv_path)
-        self._seen_keys = (self._seen_keys or set()) | {dedupe_key, source_record_id}
+        seen.add(dedupe_key)
+        seen.add(source_record_id)
         return raw_path, csv_path
 
     def _build_merged_record(

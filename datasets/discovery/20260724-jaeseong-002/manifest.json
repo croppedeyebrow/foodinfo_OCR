@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260724-jaeseong-002",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "살치살",
+  "requested_url": "https://www.kurly.com/search?sword=%EC%82%B4%EC%B9%98%EC%82%B4",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-07-24T22:15:41.375359+09:00",
+  "finished_at": "2026-07-24T22:15:47.320221+09:00",
+  "status": "COMPLETED"
+}

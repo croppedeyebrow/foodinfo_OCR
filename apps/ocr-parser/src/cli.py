@@ -11,6 +11,7 @@ import typer
 from paddleocr import PaddleOCR
 
 from .exporter import append_failure_csv
+from .batch_filter import batch_belongs_to_member
 from .models import FailureRecord, ProductInput
 from .pipeline import ProductOcrPipeline
 
@@ -66,11 +67,27 @@ def process_batch(
     manifest: Path = typer.Option(
         Path("/data/input/crawled_products.csv"), "--manifest", exists=True
     ),
+    batch_id: str | None = typer.Option(
+        None,
+        "--batch-id",
+        help="처리할 배치 ID. 생략 시 BATCH_MEMBER 소속 배치만 처리",
+    ),
     data_root: Path = typer.Option(Path("/data"), "--data-root"),
 ) -> None:
-    """입력 manifest CSV의 상품을 순차 처리한다."""
+    """입력 manifest CSV의 상품을 순차 처리한다.
+
+    기본적으로 `.env`의 BATCH_MEMBER가 들어간 batch_id 행만 처리한다.
+    `--batch-id`를 주면 해당 배치만 처리한다.
+    """
     outcome_root = Path(os.getenv("OUTCOME_ROOT", "/outcome"))
     member = os.getenv("BATCH_MEMBER", "unknown")
+
+    if batch_id is not None and not batch_belongs_to_member(batch_id, member):
+        typer.echo(
+            f"--batch-id '{batch_id}' does not belong to BATCH_MEMBER='{member}'.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
 
     pipeline = ProductOcrPipeline(
         parser_version=os.getenv("PARSER_VERSION", "0.2.0"),
@@ -79,28 +96,36 @@ def process_batch(
     success_count = 0
     failure_count = 0
     skipped_count = 0
+    filtered_out = 0
 
     with manifest.open("r", encoding="utf-8-sig", newline="") as file:
         for row in csv.DictReader(file):
+            row_batch_id = (row.get("batch_id") or "").strip()
+            if batch_id is not None:
+                if row_batch_id != batch_id:
+                    filtered_out += 1
+                    continue
+            elif not batch_belongs_to_member(row_batch_id, member):
+                filtered_out += 1
+                continue
+
             try:
                 normalized_row = {
                     key: (value if value != "" else None) for key, value in row.items()
                 }
                 if normalized_row.get("source_site") is None:
                     normalized_row["source_site"] = "KURLY"
-                # 기존 products.csv 호환: product_name 유지
                 product = ProductInput(**normalized_row)
                 raw_path, csv_path = pipeline.process(product, data_root)
-                if raw_path is None and not product.image_path:
-                    # DOM only 또는 중복 스킵도 성공으로 집계
-                    skipped_count += 0
+                if raw_path is None:
+                    skipped_count += 1
                 success_count += 1
                 typer.echo(f"OK: {product.original_product_id} -> {csv_path}")
             except Exception as error:  # 배치 전체 중단 방지
                 failure_count += 1
-                batch_id = row.get("batch_id", "UNKNOWN_BATCH")
+                fail_batch_id = row_batch_id or "UNKNOWN_BATCH"
                 failure = FailureRecord(
-                    batch_id=batch_id,
+                    batch_id=fail_batch_id,
                     source_site=row.get("source_site") or "KURLY",
                     original_product_id=row.get("original_product_id", ""),
                     product_name=row.get("product_name", ""),
@@ -112,12 +137,21 @@ def process_batch(
                 )
                 append_failure_csv(
                     failure,
-                    outcome_root / member / batch_id / "failures.csv",
+                    outcome_root / member / fail_batch_id / "failures.csv",
                 )
                 typer.echo(f"FAILED: {failure.original_product_id}: {error}", err=True)
 
+    if success_count == 0 and failure_count == 0:
+        typer.echo(
+            f"No rows matched. BATCH_MEMBER={member}, "
+            f"batch_id={batch_id or '(member filter)'}, filtered_out={filtered_out}",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
     typer.echo(
-        f"Completed: success={success_count}, failure={failure_count}, skipped={skipped_count}"
+        f"Completed: success={success_count}, failure={failure_count}, "
+        f"skipped={skipped_count}, filtered_out={filtered_out}, member={member}"
     )
 
 

@@ -101,9 +101,20 @@ datasets\input\crawled_products.csv
 
 ## 3단계: OCR 및 최종 CSV
 
+`.env`의 `BATCH_MEMBER`에 해당하는 배치만 처리합니다.  
+다른 팀원 배치는 자동으로 건너뜁니다.
+
 ```cmd
 docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/input/crawled_products.csv
 ```
+
+특정 배치만 지정:
+
+```cmd
+docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/input/crawled_products.csv --batch-id 20260724-jaeseong-001
+```
+
+`--batch-id`는 반드시 본인 `BATCH_MEMBER`가 들어간 배치여야 합니다.
 
 ### 3단계 결과
 
@@ -122,5 +133,5 @@ docker compose run --rm crawler python -m src.cli discover-search --keyword "육
 
 docker compose run --rm crawler python -m src.cli collect-details --manifest /data/discovery/20260724-jaeseong-001/discovered_products.csv
 
-docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/input/crawled_products.csv
+docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/input/crawled_products.csv --batch-id 20260724-jaeseong-001
 ```

@@ -143,8 +143,17 @@ docker compose run --rm crawler python -m src.cli collect-batch --input /data/in
 
 ## 3단계: OCR 및 최종 CSV
 
+`.env`의 `BATCH_MEMBER`가 포함된 `batch_id` 행만 처리합니다.  
+공유 `crawled_products.csv`에 다른 팀원 배치가 있어도 자동으로 건너뜁니다.
+
 ```cmd
 docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/input/crawled_products.csv
+```
+
+특정 배치만:
+
+```cmd
+docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/input/crawled_products.csv --batch-id 20260724-jaeseong-001
 ```
 
 DOM 값이 있으면 OCR 없이도 기록되고, 이미지가 있으면 OCR 후 DOM과 병합합니다.  
@@ -169,8 +178,8 @@ docker compose run --rm crawler python -m src.cli discover-search --keyword "육
 REM 2) 상세 수집
 docker compose run --rm crawler python -m src.cli collect-details --manifest /data/discovery/20260724-jaeseong-001/discovered_products.csv
 
-REM 3) OCR + 최종 CSV
-docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/input/crawled_products.csv
+REM 3) OCR + 최종 CSV (본인 BATCH_MEMBER 배치만 / 또는 --batch-id 지정)
+docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/input/crawled_products.csv --batch-id 20260724-jaeseong-001
 ```
 
 ## 테스트
