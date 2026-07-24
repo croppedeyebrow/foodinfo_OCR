@@ -36,6 +36,16 @@ docker compose build ocr-parser
 
 입력: `datasets\input\product_urls.txt`
 
+지원 URL 예:
+
+```text
+# 컬리 본사이트
+https://www.kurly.com/goods/5047857?collectionCode=...
+
+# 네이버플러스 스토어 컬리N마트
+https://shopping.naver.com/window-products/kurlynmart/12274518551?...
+```
+
 ```cmd
 docker compose run --rm crawler python -m src.cli discover-urls --input /data/input/product_urls.txt --batch-id 20260724-jaeseong-001
 ```
@@ -94,27 +104,23 @@ docker compose run --rm crawler python -m src.cli collect-batch --input /data/in
 ```text
 datasets\crawl_raw\{상품ID}.json
 datasets\detail_images\
-datasets\input\crawled_products.csv
+datasets\discovery\{배치ID}\crawled_products.csv
 ```
+
+배치마다 파일이 갈라지므로 팀원끼리 Git 충돌이 나지 않습니다.  
+(예전 공용 `datasets\input\crawled_products.csv`는 더 이상 기본 경로가 아닙니다.)
 
 ---
 
 ## 3단계: OCR 및 최종 CSV
 
-`.env`의 `BATCH_MEMBER`에 해당하는 배치만 처리합니다.  
-다른 팀원 배치는 자동으로 건너뜁니다.
+2단계에서 만든 **같은 배치**의 `crawled_products.csv`를 지정합니다.
 
 ```cmd
-docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/input/crawled_products.csv
+docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
 ```
 
-특정 배치만 지정:
-
-```cmd
-docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/input/crawled_products.csv --batch-id 20260724-jaeseong-001
-```
-
-`--batch-id`는 반드시 본인 `BATCH_MEMBER`가 들어간 배치여야 합니다.
+`.env`의 `BATCH_MEMBER`와 다른 팀원 배치는 자동으로 건너뜁니다.
 
 ### 3단계 결과
 
@@ -133,5 +139,5 @@ docker compose run --rm crawler python -m src.cli discover-search --keyword "육
 
 docker compose run --rm crawler python -m src.cli collect-details --manifest /data/discovery/20260724-jaeseong-001/discovered_products.csv
 
-docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/input/crawled_products.csv --batch-id 20260724-jaeseong-001
+docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
 ```

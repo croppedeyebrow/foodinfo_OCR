@@ -65,7 +65,10 @@ def process_one(
 @app.command("process-batch")
 def process_batch(
     manifest: Path = typer.Option(
-        Path("/data/input/crawled_products.csv"), "--manifest", exists=True
+        ...,
+        "--manifest",
+        exists=True,
+        help="배치별 crawled_products.csv (예: /data/discovery/{batch_id}/crawled_products.csv)",
     ),
     batch_id: str | None = typer.Option(
         None,

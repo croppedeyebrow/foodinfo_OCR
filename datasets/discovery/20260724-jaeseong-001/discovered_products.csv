@@ -1,0 +1,2 @@
+﻿schema_version,batch_id,source_site,source_mode,source_value,original_product_id,product_name_preview,product_url,discovery_order,discovered_at,discovery_status
+1.0,20260724-jaeseong-001,KURLY,URL_LIST,product_urls.txt,12274518551,,https://shopping.naver.com/window-products/kurlynmart/12274518551,1,2026-07-24T23:13:17.156690+09:00,DISCOVERED

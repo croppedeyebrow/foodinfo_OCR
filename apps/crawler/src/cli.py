@@ -179,8 +179,10 @@ def collect_details(
     manifest: Path = typer.Option(..., "--manifest", exists=True),
     force: bool = typer.Option(False, "--force"),
     data_root: Path = typer.Option(Path("/data"), "--data-root"),
-    output_manifest: Path = typer.Option(
-        Path("/data/input/crawled_products.csv"), "--output-manifest"
+    output_manifest: Path | None = typer.Option(
+        None,
+        "--output-manifest",
+        help="기본값: /data/discovery/{batch_id}/crawled_products.csv",
     ),
 ) -> None:
     """discovered_products.csv를 읽어 상품 상세페이지를 수집한다."""
@@ -194,6 +196,12 @@ def collect_details(
     if not rows:
         typer.echo("No discovered products in manifest.", err=True)
         raise typer.Exit(code=1)
+
+    primary_batch_id = (rows[0].get("batch_id") or "UNKNOWN_BATCH").strip()
+    if output_manifest is None:
+        output_manifest = (
+            data_root / "discovery" / primary_batch_id / "crawled_products.csv"
+        )
 
     crawl_raw_dir = data_root / "crawl_raw"
     manifest_rows: list[ManifestRow] = []
@@ -294,12 +302,16 @@ def collect_batch(
     ),
     batch_id: str = typer.Option(..., "--batch-id"),
     data_root: Path = typer.Option(Path("/data"), "--data-root"),
-    manifest_path: Path = typer.Option(
-        Path("/data/input/crawled_products.csv"), "--manifest"
+    manifest_path: Path | None = typer.Option(
+        None,
+        "--manifest",
+        help="기본값: /data/discovery/{batch_id}/crawled_products.csv",
     ),
 ) -> None:
     """URL 목록을 순차 수집하고 crawl_raw/manifest를 생성한다. (기존 호환)"""
     settings = load_settings()
+    if manifest_path is None:
+        manifest_path = data_root / "discovery" / batch_id / "crawled_products.csv"
     urls = load_unique_urls(input_file.read_text(encoding="utf-8").splitlines())
     if not urls:
         typer.echo("No product URLs found.", err=True)

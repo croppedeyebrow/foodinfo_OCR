@@ -6,10 +6,22 @@ from urllib.parse import quote, urlparse, urlunparse
 from .models import KurlyProductUrl
 
 
-PRODUCT_ID_PATTERN = re.compile(r"/goods/(?P<product_id>\d+)", re.IGNORECASE)
-PRODUCT_PATH_PATTERN = PRODUCT_ID_PATTERN
+# 컬리 본사이트 상품
+KURLY_GOODS_PATTERN = re.compile(r"/goods/(?P<product_id>\d+)", re.IGNORECASE)
+# 네이버플러스 스토어 컬리N마트 상품
+# 예: https://shopping.naver.com/window-products/kurlynmart/12274518551?...
+NAVER_KURLYN_MART_PATTERN = re.compile(
+    r"/window-products/kurlynmart/(?P<product_id>\d+)",
+    re.IGNORECASE,
+)
+
+PRODUCT_ID_PATTERN = KURLY_GOODS_PATTERN  # 하위 호환 별칭
+PRODUCT_PATH_PATTERN = KURLY_GOODS_PATTERN
 CATEGORY_CODE_PATTERN = re.compile(r"^\d+$")
 CATEGORY_PATH_PATTERN = re.compile(r"/categories/(?P<category_code>\d+)", re.IGNORECASE)
+
+SOURCE_KURLY_GOODS = "KURLY_GOODS"
+SOURCE_NAVER_KURLYN_MART = "NAVER_KURLYN_MART"
 
 
 class InvalidProductUrlError(ValueError):
@@ -20,15 +32,27 @@ class InvalidCategoryError(ValueError):
     error_code = "INVALID_CATEGORY_URL"
 
 
+def _match_product(url: str) -> tuple[str, str]:
+    """(source_kind, product_id)를 반환한다."""
+    naver = NAVER_KURLYN_MART_PATTERN.search(url)
+    if naver:
+        return SOURCE_NAVER_KURLYN_MART, naver.group("product_id")
+    kurly = KURLY_GOODS_PATTERN.search(url)
+    if kurly:
+        return SOURCE_KURLY_GOODS, kurly.group("product_id")
+    raise InvalidProductUrlError(f"Cannot extract product id from URL: {url}")
+
+
 def parse_kurly_product_id(url: str) -> str:
-    match = PRODUCT_ID_PATTERN.search(url)
-    if not match:
-        raise InvalidProductUrlError(f"Cannot extract product id from URL: {url}")
-    return match.group("product_id")
+    _, product_id = _match_product(url)
+    return product_id
 
 
 def canonicalize_kurly_url(url: str) -> str:
-    product_id = parse_kurly_product_id(url)
+    source_kind, product_id = _match_product(url)
+    if source_kind == SOURCE_NAVER_KURLYN_MART:
+        return f"https://shopping.naver.com/window-products/kurlynmart/{product_id}"
+
     parsed = urlparse(url)
     scheme = parsed.scheme or "https"
     netloc = parsed.netloc or "www.kurly.com"
@@ -38,11 +62,12 @@ def canonicalize_kurly_url(url: str) -> str:
 
 
 def canonicalize_product_url(href: str) -> tuple[str, str] | None:
-    match = PRODUCT_PATH_PATTERN.search(href)
-    if match is None:
+    try:
+        product_id = parse_kurly_product_id(href)
+        canonical = canonicalize_kurly_url(href)
+    except InvalidProductUrlError:
         return None
-    product_id = match.group("product_id")
-    return product_id, f"https://www.kurly.com/goods/{product_id}"
+    return product_id, canonical
 
 
 def parse_kurly_product_url(url: str) -> KurlyProductUrl:
