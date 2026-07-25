@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}2.5 판별 · Pipeline Console{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>2.5단계 · 이미지 텍스트 판별</h1>
+  <p class="lead">crawled_products의 이미지를 판별해 image_text_check.csv를 만듭니다. NO_TEXT는 3단계에서 OCR을 건너뜁니다.</p>
+  <p class="hint">Paddle 프리패스는 Windows/Linux(amd64) 환경을 권장합니다. Mac에서는 휴리스틱 폴백·UNKNOWN이 늘 수 있습니다.</p>
+
+  <form
+    hx-post="/jobs/classify"
+    hx-target="#job-panel"
+    hx-swap="innerHTML"
+    hx-disabled-elt="button[type=submit]"
+  >
+    <label for="batch_id">배치</label>
+    <select name="batch_id" id="batch_id" required>
+      {% if not batches %}
+      <option value="" disabled selected>discovery 배치 없음</option>
+      {% endif %}
+      {% for batch in batches %}
+      <option value="{{ batch }}" {% if batch == selected_batch %}selected{% endif %}>{{ batch }}</option>
+      {% endfor %}
+    </select>
+
+    <label>
+      <input type="checkbox" name="force" value="1" style="width:auto; margin-right:0.4rem;">
+      --force (이미 체크된 이미지 재검사)
+    </label>
+
+    <div class="actions" style="margin-top:0.85rem;">
+      <button type="submit" {% if not batches %}disabled{% endif %}>판별 실행</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <h1>실행 상태 · 로그</h1>
+  <div
+    id="job-panel"
+    hx-get="/jobs/status"
+    hx-trigger="load, every 2s"
+    hx-swap="innerHTML"
+  >
+    {% include "partials/job_status.html" %}
+  </div>
+</section>
+
+{% if summary %}
+<section class="panel">
+  <h1>결과 요약</h1>
+  {% include "partials/summary.html" %}
+</section>
+{% endif %}
+{% endblock %}

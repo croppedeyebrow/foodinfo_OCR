@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}2. 상세 · Pipeline Console{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>2단계 · 상세페이지 수집</h1>
+  <p class="lead">discovery 배치의 discovered_products.csv를 읽어 상세·이미지를 수집합니다.</p>
+
+  <form
+    hx-post="/jobs/collect"
+    hx-target="#job-panel"
+    hx-swap="innerHTML"
+    hx-disabled-elt="button[type=submit]"
+  >
+    <label for="batch_id">배치</label>
+    <select name="batch_id" id="batch_id" required>
+      {% if not batches %}
+      <option value="" disabled selected>discovery 배치 없음</option>
+      {% endif %}
+      {% for batch in batches %}
+      <option value="{{ batch }}" {% if batch == selected_batch %}selected{% endif %}>{{ batch }}</option>
+      {% endfor %}
+    </select>
+
+    <label>
+      <input type="checkbox" name="force" value="1" style="width:auto; margin-right:0.4rem;">
+      --force (이미 수집한 상품도 재수집)
+    </label>
+
+    <div class="actions" style="margin-top:0.85rem;">
+      <button type="submit" {% if not batches %}disabled{% endif %}>상세 수집 실행</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <h1>실행 상태 · 로그</h1>
+  <div
+    id="job-panel"
+    hx-get="/jobs/status"
+    hx-trigger="load, every 2s"
+    hx-swap="innerHTML"
+  >
+    {% include "partials/job_status.html" %}
+  </div>
+</section>
+
+{% if summary %}
+<section class="panel">
+  <h1>결과 요약</h1>
+  {% include "partials/summary.html" %}
+</section>
+{% endif %}
+{% endblock %}

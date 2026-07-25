@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}1. 발견 · Pipeline Console{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>1단계 · 상품 발견</h1>
+  <p class="lead">모드 중 하나만 실행합니다. 같은 batch-id 디렉터리가 있으면 거부됩니다.</p>
+
+  <form
+    hx-post="/jobs/discover"
+    hx-target="#job-panel"
+    hx-swap="innerHTML"
+    hx-disabled-elt="button[type=submit]"
+  >
+    <label for="mode">모드</label>
+    <select name="mode" id="mode" required>
+      <option value="urls">URL 목록 (product_urls.txt)</option>
+      <option value="search" selected>검색어</option>
+      <option value="category">카테고리</option>
+    </select>
+
+    <label for="batch_id">batch-id</label>
+    <input name="batch_id" id="batch_id" required placeholder="YYYYMMDD-{{ batch_member }}-001" value="{{ suggested_batch_id }}">
+
+    <div class="row">
+      <div>
+        <label for="keyword">검색어 (search)</label>
+        <input name="keyword" id="keyword" placeholder="육류">
+      </div>
+      <div>
+        <label for="category_code">카테고리 코드 (category)</label>
+        <input name="category_code" id="category_code" placeholder="910">
+      </div>
+    </div>
+
+    <label for="category_url">카테고리 URL (코드 대신 사용 가능)</label>
+    <input name="category_url" id="category_url" placeholder="https://www.kurly.com/categories/910">
+
+    <div class="row">
+      <div>
+        <label for="max_products">max-products</label>
+        <input type="number" name="max_products" id="max_products" value="5" min="1" max="500">
+      </div>
+      <div>
+        <label for="max_scrolls">max-scrolls</label>
+        <input type="number" name="max_scrolls" id="max_scrolls" value="3" min="1" max="100">
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="submit">발견 실행</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <h1>실행 상태 · 로그</h1>
+  <div
+    id="job-panel"
+    hx-get="/jobs/status"
+    hx-trigger="load, every 2s"
+    hx-swap="innerHTML"
+  >
+    {% include "partials/job_status.html" %}
+  </div>
+</section>
+
+{% if summary %}
+<section class="panel">
+  <h1>결과 요약</h1>
+  {% include "partials/summary.html" %}
+</section>
+{% endif %}
+{% endblock %}

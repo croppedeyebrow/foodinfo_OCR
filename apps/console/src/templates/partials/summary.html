@@ -1,0 +1,33 @@
+<div class="summary">
+  {% if summary.kind == "csv" %}
+  <p>
+    {% if summary.exists %}
+    파일 있음 · 행 수 <strong>{{ summary.row_count }}</strong>
+    {% else %}
+    파일 없음
+    {% endif %}
+  </p>
+  <p><code>{{ summary.path }}</code></p>
+  {% elif summary.kind == "text_check" %}
+  <p>
+    {% if summary.exists %}
+    행 {{ summary.row_count }} ·
+    HAS_TEXT={{ summary.has_text }},
+    NO_TEXT={{ summary.no_text }},
+    UNKNOWN={{ summary.unknown }}
+    {% else %}
+    image_text_check.csv 없음
+    {% endif %}
+  </p>
+  <p><code>{{ summary.path }}</code></p>
+  {% elif summary.kind == "ocr" %}
+  <p>
+    products:
+    {% if summary.products_exists %}{{ summary.products_rows }}행{% else %}없음{% endif %}
+    · failures:
+    {% if summary.failures_exists %}{{ summary.failures_rows }}행{% else %}없음{% endif %}
+  </p>
+  <p><code>{{ summary.products_path }}</code></p>
+  <p><code>{{ summary.failures_path }}</code></p>
+  {% endif %}
+</div>

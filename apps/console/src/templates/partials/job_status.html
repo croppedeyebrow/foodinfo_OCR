@@ -1,0 +1,15 @@
+<div class="summary">
+  <p>
+    상태:
+    <span class="status-pill {{ status.state.value }}">{{ status.state.value }}</span>
+    {% if status.step %}· 단계 <strong>{{ status.step }}</strong>{% endif %}
+    {% if status.exit_code is not none %}· exit {{ status.exit_code }}{% endif %}
+  </p>
+  {% if status.command %}
+  <p><code>{{ status.command | join(" ") }}</code></p>
+  {% endif %}
+  {% if status.error %}
+  <p class="error">{{ status.error }}</p>
+  {% endif %}
+  <pre class="log">{{ status.log or "(로그 없음)" }}</pre>
+</div>

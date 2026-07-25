@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}홈 · Pipeline Console{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>단계별 실행</h1>
+  <p class="lead">
+    CMD 대신 화면에서 파라미터를 확인하고 1 → 2 → 2.5 → 3 순서로 실행합니다.
+    실제 작업은 <code>docker compose run</code>으로 crawler / ocr-parser를 호출합니다.
+  </p>
+  <ol>
+    <li><a href="/steps/discover">상품 발견</a> — URL / 검색 / 카테고리</li>
+    <li><a href="/steps/collect">상세 수집</a> — discovered → crawled</li>
+    <li><a href="/steps/classify">이미지 텍스트 판별</a> — image_text_check.csv</li>
+    <li><a href="/steps/ocr">OCR · 최종 CSV</a> — outcome/{{ batch_member }}/</li>
+  </ol>
+</section>
+
+<section class="panel">
+  <h1>최근 작업</h1>
+  <div
+    id="job-panel"
+    hx-get="/jobs/status"
+    hx-trigger="load, every 2s"
+    hx-swap="innerHTML"
+  >
+    {% include "partials/job_status.html" %}
+  </div>
+</section>
+{% endblock %}

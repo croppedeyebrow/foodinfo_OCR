@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}3. OCR · Pipeline Console{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>3단계 · OCR 및 최종 CSV</h1>
+  <p class="lead">같은 배치의 crawled_products.csv를 OCR합니다. image_text_check.csv가 있으면 NO_TEXT는 자동 스킵됩니다.</p>
+  <p class="hint">PaddleOCR은 Windows/Linux(amd64) 환경을 권장합니다. Mac Apple Silicon에서는 실패할 수 있습니다.</p>
+
+  <form
+    hx-post="/jobs/ocr"
+    hx-target="#job-panel"
+    hx-swap="innerHTML"
+    hx-disabled-elt="button[type=submit]"
+  >
+    <label for="batch_id">배치</label>
+    <select name="batch_id" id="batch_id" required>
+      {% if not batches %}
+      <option value="" disabled selected>discovery 배치 없음</option>
+      {% endif %}
+      {% for batch in batches %}
+      <option value="{{ batch }}" {% if batch == selected_batch %}selected{% endif %}>{{ batch }}</option>
+      {% endfor %}
+    </select>
+
+    <div class="actions">
+      <button type="submit" {% if not batches %}disabled{% endif %}>OCR 실행</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <h1>실행 상태 · 로그</h1>
+  <div
+    id="job-panel"
+    hx-get="/jobs/status"
+    hx-trigger="load, every 2s"
+    hx-swap="innerHTML"
+  >
+    {% include "partials/job_status.html" %}
+  </div>
+</section>
+
+{% if summary %}
+<section class="panel">
+  <h1>결과 요약</h1>
+  {% include "partials/summary.html" %}
+</section>
+{% endif %}
+{% endblock %}

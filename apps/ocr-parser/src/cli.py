@@ -10,10 +10,18 @@ import paddle
 import typer
 from paddleocr import PaddleOCR
 
-from .exporter import append_failure_csv
 from .batch_filter import batch_belongs_to_member
+from .exporter import append_failure_csv
+from .image_check_exporter import (
+    ImageTextCheckRecord,
+    image_check_csv_path,
+    load_checked_image_paths,
+    load_image_text_checks,
+    merge_and_write_image_text_checks,
+)
 from .models import FailureRecord, ProductInput
 from .pipeline import ProductOcrPipeline
+from .text_presence import TextPresence, classify_image_text_presence
 
 app = typer.Typer(no_args_is_help=True)
 KST = ZoneInfo("Asia/Seoul")
@@ -62,6 +70,122 @@ def process_one(
     typer.echo(f"Batch CSV: {csv_path}")
 
 
+@app.command("classify-images")
+def classify_images(
+    manifest: Path = typer.Option(
+        ...,
+        "--manifest",
+        exists=True,
+        help="배치별 crawled_products.csv",
+    ),
+    batch_id: str = typer.Option(..., "--batch-id"),
+    data_root: Path = typer.Option(Path("/data"), "--data-root"),
+    force: bool = typer.Option(False, "--force", help="기존 체크 결과 재검사"),
+) -> None:
+    """상세 이미지의 텍스트 유무를 판별해 image_text_check.csv를 생성한다."""
+    member = os.getenv("BATCH_MEMBER", "unknown")
+    if not batch_belongs_to_member(batch_id, member):
+        typer.echo(
+            f"--batch-id '{batch_id}' does not belong to BATCH_MEMBER='{member}'.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    check_path = image_check_csv_path(data_root / "discovery", batch_id)
+    already_checked = set() if force else load_checked_image_paths(check_path)
+
+    # Paddle은 애매 구간에서만 쓰므로 lazy 초기화
+    engine_holder: dict[str, object] = {"engine": None}
+
+    def get_engine():
+        if engine_holder["engine"] is None:
+            from .ocr_engine import PaddleOcrEngine
+
+            engine_holder["engine"] = PaddleOcrEngine(
+                language=os.getenv("OCR_LANGUAGE", "korean")
+            )
+        return engine_holder["engine"]
+
+    new_records: list[ImageTextCheckRecord] = []
+    scanned = 0
+    skipped_existing = 0
+    has_text = 0
+    no_text = 0
+    unknown = 0
+
+    with manifest.open("r", encoding="utf-8-sig", newline="") as file:
+        for row in csv.DictReader(file):
+            row_batch = (row.get("batch_id") or "").strip()
+            if row_batch and row_batch != batch_id:
+                continue
+            image_rel = (row.get("image_path") or "").strip()
+            if not image_rel:
+                continue
+            if image_rel in already_checked:
+                skipped_existing += 1
+                continue
+
+            image_file = Path(image_rel)
+            if not image_file.is_absolute():
+                image_file = data_root / image_rel
+
+            # 휴리스틱 먼저; 애매할 때만 엔진 생성
+            from .text_presence import classify_by_heuristic
+
+            heuristic = None
+            if image_file.is_file():
+                heuristic = classify_by_heuristic(image_file)
+
+            if heuristic is not None:
+                result = heuristic
+            else:
+                try:
+                    result = classify_image_text_presence(
+                        image_file,
+                        engine=get_engine(),  # type: ignore[arg-type]
+                    )
+                except Exception as error:  # noqa: BLE001
+                    result = classify_image_text_presence(image_file, engine=None)
+                    result.notes = f"{result.notes};engine_init_failed:{error}"
+
+            scanned += 1
+            if result.text_presence == TextPresence.HAS_TEXT:
+                has_text += 1
+            elif result.text_presence == TextPresence.NO_TEXT:
+                no_text += 1
+            else:
+                unknown += 1
+
+            new_records.append(
+                ImageTextCheckRecord(
+                    batch_id=batch_id,
+                    original_product_id=(row.get("original_product_id") or "").strip(),
+                    image_path=image_rel,
+                    text_presence=result.text_presence,
+                    detect_method=result.detect_method,
+                    confidence=result.confidence,
+                    checked_at=datetime.now(KST),
+                    notes=result.notes,
+                )
+            )
+            already_checked.add(image_rel)
+            typer.echo(
+                f"{result.text_presence.value}: {image_rel} ({result.detect_method.value})"
+            )
+
+    if new_records:
+        merge_and_write_image_text_checks(check_path, new_records)
+
+    typer.echo(f"Check CSV: {check_path}")
+    typer.echo(
+        f"Completed: scanned={scanned}, skipped_existing={skipped_existing}, "
+        f"HAS_TEXT={has_text}, NO_TEXT={no_text}, UNKNOWN={unknown}"
+    )
+    if scanned == 0 and skipped_existing == 0:
+        typer.echo("No images found in manifest.", err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("process-batch")
 def process_batch(
     manifest: Path = typer.Option(
@@ -81,6 +205,7 @@ def process_batch(
 
     기본적으로 `.env`의 BATCH_MEMBER가 들어간 batch_id 행만 처리한다.
     `--batch-id`를 주면 해당 배치만 처리한다.
+    image_text_check.csv가 있으면 NO_TEXT 이미지는 OCR을 건너뛴다.
     """
     outcome_root = Path(os.getenv("OUTCOME_ROOT", "/outcome"))
     member = os.getenv("BATCH_MEMBER", "unknown")
@@ -92,6 +217,24 @@ def process_batch(
         )
         raise typer.Exit(code=1)
 
+    # 배치별 텍스트 체크 맵 캐시
+    text_checks_by_batch: dict[str, dict[str, str] | None] = {}
+
+    def checks_for(row_batch: str) -> dict[str, str] | None:
+        if row_batch not in text_checks_by_batch:
+            check_file = image_check_csv_path(data_root / "discovery", row_batch)
+            if check_file.exists():
+                text_checks_by_batch[row_batch] = load_image_text_checks(check_file)
+                typer.echo(f"Loaded text checks: {check_file}")
+            else:
+                text_checks_by_batch[row_batch] = None
+                typer.echo(
+                    f"WARNING: image_text_check.csv not found for {row_batch}; "
+                    "OCR will run for all images.",
+                    err=True,
+                )
+        return text_checks_by_batch[row_batch]
+
     pipeline = ProductOcrPipeline(
         parser_version=os.getenv("PARSER_VERSION", "0.2.0"),
         language=os.getenv("OCR_LANGUAGE", "korean"),
@@ -100,6 +243,7 @@ def process_batch(
     failure_count = 0
     skipped_count = 0
     filtered_out = 0
+    no_text_skipped = 0
 
     with manifest.open("r", encoding="utf-8-sig", newline="") as file:
         for row in csv.DictReader(file):
@@ -111,6 +255,15 @@ def process_batch(
             elif not batch_belongs_to_member(row_batch_id, member):
                 filtered_out += 1
                 continue
+
+            image_rel = (row.get("image_path") or "").strip()
+            checks = checks_for(row_batch_id) if row_batch_id else None
+            if checks is not None and image_rel:
+                presence = checks.get(image_rel)
+                if presence == TextPresence.NO_TEXT.value:
+                    no_text_skipped += 1
+                    typer.echo(f"SKIP_NO_TEXT: {image_rel}")
+                    continue
 
             try:
                 normalized_row = {
@@ -144,7 +297,7 @@ def process_batch(
                 )
                 typer.echo(f"FAILED: {failure.original_product_id}: {error}", err=True)
 
-    if success_count == 0 and failure_count == 0:
+    if success_count == 0 and failure_count == 0 and no_text_skipped == 0:
         typer.echo(
             f"No rows matched. BATCH_MEMBER={member}, "
             f"batch_id={batch_id or '(member filter)'}, filtered_out={filtered_out}",
@@ -154,7 +307,8 @@ def process_batch(
 
     typer.echo(
         f"Completed: success={success_count}, failure={failure_count}, "
-        f"skipped={skipped_count}, filtered_out={filtered_out}, member={member}"
+        f"skipped={skipped_count}, no_text_skipped={no_text_skipped}, "
+        f"filtered_out={filtered_out}, member={member}"
     )
 
 

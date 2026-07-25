@@ -6,6 +6,7 @@
 
 - `crawler`: Playwright 기반 상품 발견 및 상세페이지 수집
 - `ocr-parser`: PaddleOCR 기반 OCR, DOM·OCR 병합, 최종 CSV
+- `console`: FastAPI 단계별 실행 UI (`docker compose` CLI 호출)
 - `normalizer`: (추후) KFIA 기준 통합 정제
 - `postgres`: (추후) 정제 데이터 적재
 
@@ -61,6 +62,35 @@ BATCH_MEMBER=jaeseong
 docker compose run --rm crawler
 docker compose run --rm ocr-parser
 ```
+
+## 단계별 실행 UI (Console)
+
+CMD 대신 브라우저에서 1 → 2 → 2.5 → 3 파라미터를 확인·실행할 수 있습니다.  
+호스트에서 FastAPI를 띄우고, 내부적으로 `docker compose run`을 호출합니다.
+
+**공통 (Windows / Mac)**
+
+```cmd
+python start_console.py
+```
+
+Mac에서 `python`이 없으면:
+
+```bash
+python3 start_console.py
+```
+
+| OS | 더블클릭·단축 실행 |
+|---|---|
+| Windows | `start-console.cmd` |
+| Mac / Linux | `bash start-console.sh` (최초 1회: `chmod +x start-console.sh` 후 `./start-console.sh`) |
+
+포트 변경 예: `python start_console.py 8790`  
+브라우저 없이: `python start_console.py --no-browser`
+
+브라우저: [http://127.0.0.1:8787](http://127.0.0.1:8787)
+
+동시에 하나의 작업만 실행됩니다. OCR/판별은 Windows·Linux(amd64) 환경을 권장합니다.
 
 ## 1단계: 상품 발견 (Discovery)
 
@@ -143,9 +173,31 @@ outcome/{팀원}/{배치ID}/failures.csv   (상세 수집 실패 시)
 docker compose run --rm crawler python -m src.cli collect-batch --input /data/input/product_urls.txt --batch-id 20260723-jaeseong-001
 ```
 
+## 2.5단계: 이미지 텍스트 판별 (권장)
+
+상세 이미지에 텍스트가 있는지 하이브리드(휴리스틱 → 애매 시 Paddle)로 판별합니다.  
+결과는 배치 폴더의 `image_text_check.csv`에 저장되며, `NO_TEXT` 이미지는 3단계 OCR에서 자동 스킵됩니다.
+
+```cmd
+docker compose run --rm ocr-parser python -m src.cli classify-images --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
+```
+
+재검사:
+
+```cmd
+docker compose run --rm ocr-parser python -m src.cli classify-images --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001 --force
+```
+
+### 2.5단계 산출물
+
+```text
+datasets/discovery/{배치ID}/image_text_check.csv
+```
+
 ## 3단계: OCR 및 최종 CSV
 
-2단계에서 만든 **같은 배치**의 CSV를 `--manifest`로 지정합니다.
+2단계에서 만든 **같은 배치**의 CSV를 `--manifest`로 지정합니다.  
+2.5단계를 먼저 실행하면 `NO_TEXT` 이미지는 OCR을 건너뜁니다. 체크 파일이 없으면 경고 후 전부 OCR합니다.
 
 ```cmd
 docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
@@ -174,6 +226,9 @@ docker compose run --rm crawler python -m src.cli discover-search --keyword "육
 
 REM 2) 상세 수집
 docker compose run --rm crawler python -m src.cli collect-details --manifest /data/discovery/20260724-jaeseong-001/discovered_products.csv
+
+REM 2.5) 이미지 텍스트 판별
+docker compose run --rm ocr-parser python -m src.cli classify-images --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
 
 REM 3) OCR + 최종 CSV
 docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001

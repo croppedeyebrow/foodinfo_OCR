@@ -27,6 +27,34 @@ docker compose build ocr-parser
 
 ---
 
+## (대안) 단계별 실행 UI
+
+브라우저에서 파라미터를 확인하고 단계를 실행합니다. Docker 이미지는 위와 같이 미리 빌드해 두세요.
+
+**Windows / Mac 공통**
+
+```cmd
+python start_console.py
+```
+
+```bash
+# Mac (python 명령이 없을 때)
+python3 start_console.py
+```
+
+| OS | 단축 실행 |
+|---|---|
+| Windows | `start-console.cmd` |
+| Mac | `bash start-console.sh` |
+
+포트 변경: `python start_console.py 8790`  
+브라우저: http://127.0.0.1:8787
+
+- 1 발견 → 2 상세 → 2.5 판별 → 3 OCR
+- 실제 실행은 `docker compose run` (동시 1잡)
+
+---
+
 ## 1단계: 상품 발견 (Discovery)
 
 아래 중 **하나만** 실행합니다.  
@@ -112,9 +140,34 @@ datasets\discovery\{배치ID}\crawled_products.csv
 
 ---
 
+## 2.5단계: 이미지 텍스트 판별 (권장)
+
+상세 이미지에 텍스트가 있는지 판별해 `image_text_check.csv`를 만듭니다.  
+`NO_TEXT`로 표시된 이미지는 3단계 OCR에서 자동으로 건너뜁니다.
+
+```cmd
+docker compose run --rm ocr-parser python -m src.cli classify-images --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
+```
+
+이미 체크된 이미지는 기본 건너뜁니다. 재검사:
+
+```cmd
+docker compose run --rm ocr-parser python -m src.cli classify-images --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001 --force
+```
+
+### 2.5단계 결과
+
+```text
+datasets\discovery\{배치ID}\image_text_check.csv
+```
+
+---
+
 ## 3단계: OCR 및 최종 CSV
 
-2단계에서 만든 **같은 배치**의 `crawled_products.csv`를 지정합니다.
+2단계에서 만든 **같은 배치**의 `crawled_products.csv`를 지정합니다.  
+2.5단계를 먼저 실행해 두면 `NO_TEXT` 이미지는 OCR을 건너뜁니다.  
+체크 파일이 없으면 경고 후 기존처럼 전부 OCR합니다.
 
 ```cmd
 docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
@@ -138,6 +191,8 @@ outcome\{BATCH_MEMBER}\{배치ID}\failures.csv
 docker compose run --rm crawler python -m src.cli discover-search --keyword "육류" --batch-id 20260724-jaeseong-001 --max-products 5 --max-scrolls 3
 
 docker compose run --rm crawler python -m src.cli collect-details --manifest /data/discovery/20260724-jaeseong-001/discovered_products.csv
+
+docker compose run --rm ocr-parser python -m src.cli classify-images --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
 
 docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
 ```
