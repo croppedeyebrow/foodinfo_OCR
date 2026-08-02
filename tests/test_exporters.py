@@ -11,7 +11,7 @@ from conftest import use_app
 def test_write_raw_json(tmp_path: Path) -> None:
     use_app("crawler")
     from src.models import CrawledProductRecord
-    from src.raw_exporter import write_raw_json
+    from src.raw_exporter import load_raw_json, write_raw_json
 
     record = CrawledProductRecord(
         batch_id="20260719-jaeseong-001",
@@ -25,6 +25,9 @@ def test_write_raw_json(tmp_path: Path) -> None:
     assert path.name == "5047857.json"
     assert path.is_file()
     assert "5047857" in path.read_text(encoding="utf-8")
+    loaded = load_raw_json(path)
+    assert loaded.original_product_id == "5047857"
+    assert loaded.product_name_raw == "테스트 상품"
 
 
 def test_write_utf8_sig_csv(tmp_path: Path) -> None:

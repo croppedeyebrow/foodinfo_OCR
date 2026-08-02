@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Sequence
 
 
@@ -27,19 +29,207 @@ class JobStatus:
     error: str = ""
 
 
+def _compose_file_for_client() -> str | None:
+    """Compose file path readable by the CLI process (container or host)."""
+    explicit = os.getenv("COMPOSE_FILE_PATH", "").strip()
+    if explicit:
+        return explicit
+    workspace = Path("/workspace/compose.yaml")
+    if workspace.is_file():
+        return str(workspace)
+    return None
+
+
+def _in_console_container() -> bool:
+    return Path("/workspace/compose.yaml").is_file()
+
+
+def _docker_bind_path(host_dir: str) -> str:
+    """Convert a Windows host path to a Docker-style bind source."""
+    normalized = host_dir.strip().replace("\\", "/")
+    if not normalized:
+        return ""
+    if normalized.startswith("/"):
+        return normalized.rstrip("/") or "/"
+    if len(normalized) >= 2 and normalized[1] == ":":
+        drive = normalized[0].lower()
+        rest = normalized[2:]
+        if not rest.startswith("/"):
+            rest = f"/{rest}"
+        return f"/{drive}{rest}".rstrip("/")
+    return normalized.rstrip("/")
+
+
+def _looks_like_usable_bind_root(path: str) -> bool:
+    """Reject broken mountinfo paths like ``/Dev/...`` (missing drive prefix)."""
+    normalized = path.strip().replace("\\", "/")
+    if not normalized:
+        return False
+    # Windows bind without drive letter — writes into a Docker VM ghost dir.
+    if normalized.startswith("/Dev/"):
+        return False
+    return True
+
+
+def _workspace_mount_source() -> str | None:
+    """VM path that backs /workspace (from mountinfo). Often unreliable on Desktop."""
+    try:
+        lines = Path("/proc/self/mountinfo").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        parts = line.split()
+        if len(parts) < 10 or parts[4] != "/workspace":
+            continue
+        root = parts[3]
+        if root.startswith("/"):
+            return root.rstrip("/") or "/"
+    return None
+
+
+def _workspace_bind_source_via_inspect() -> str | None:
+    """Real host Source for /workspace via docker inspect (preferred)."""
+    container_id = os.getenv("HOSTNAME", "").strip()
+    if not container_id:
+        return None
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "inspect",
+                "-f",
+                '{{range .Mounts}}{{if eq .Destination "/workspace"}}{{.Source}}{{end}}{{end}}',
+                container_id,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    source = (result.stdout or "").strip().replace("\\", "/")
+    return source.rstrip("/") if source else None
+
+
+def _data_bind_root() -> str:
+    """Host project root used for ``-v .../datasets:/data`` mounts."""
+    explicit = os.getenv("DOCKER_BIND_ROOT", "").strip()
+    if explicit and _looks_like_usable_bind_root(explicit):
+        return explicit.replace("\\", "/").rstrip("/")
+
+    inspected = _workspace_bind_source_via_inspect()
+    if inspected and _looks_like_usable_bind_root(inspected):
+        return inspected
+
+    host_dir = os.getenv("HOST_PROJECT_DIR", "").strip()
+    if host_dir:
+        # Docker Desktop engine accepts Windows paths (C:/...) from Linux CLI.
+        normalized = host_dir.replace("\\", "/").rstrip("/")
+        if _looks_like_usable_bind_root(normalized) and (
+            (len(normalized) >= 2 and normalized[1] == ":")
+            or normalized.startswith("/run/desktop/mnt/host/")
+            or (
+                len(normalized) >= 3
+                and normalized[0] == "/"
+                and normalized[1].isalpha()
+                and normalized[2] == "/"
+            )
+        ):
+            if (
+                len(normalized) >= 2
+                and normalized[1] == ":"
+            ):
+                return normalized
+            if normalized.startswith("/run/desktop/mnt/host/"):
+                return normalized
+            # /c/Dev/... → Desktop VM path
+            return f"/run/desktop/mnt/host{normalized}"
+
+    mounted = _workspace_mount_source()
+    if mounted and _looks_like_usable_bind_root(mounted):
+        return mounted
+
+    converted = _docker_bind_path(host_dir)
+    if converted and _looks_like_usable_bind_root(converted):
+        if (
+            len(converted) >= 3
+            and converted[0] == "/"
+            and converted[1].isalpha()
+            and converted[2] == "/"
+        ):
+            return f"/run/desktop/mnt/host{converted}"
+        return converted
+
+    return "/workspace"
+
+
+def build_docker_run_command(service: str, cli_args: Sequence[str]) -> list[str]:
+    """Run crawler/ocr via `docker run` from inside the console container.
+
+    Avoids `docker compose run` service volumes: relative `./apps/...` paths
+    resolve to empty host dirs and wipe the image's /app/src.
+    With a usable host bind root, mount live ``apps/*/src`` so new CLI
+    commands (e.g. classify-images) work without rebuilding images.
+    """
+    project = os.getenv("COMPOSE_PROJECT_NAME", "kurly-freshness-pipeline")
+    image = f"{project}-{service}"
+    bind = _data_bind_root()
+    mount_live_src = bind != "/workspace" and _looks_like_usable_bind_root(bind)
+
+    command = ["docker", "run", "--rm"]
+    if Path("/workspace/.env").is_file():
+        command.extend(["--env-file", "/workspace/.env"])
+
+    if service == "crawler":
+        command.extend(["--init", "--shm-size", "1g"])
+        if mount_live_src:
+            command.extend(["-v", f"{bind}/apps/crawler/src:/app/src"])
+        command.extend(["-v", f"{bind}/datasets:/data"])
+    elif service == "ocr-parser":
+        command.extend(["--shm-size", "2g", "--platform", "linux/amd64"])
+        if mount_live_src:
+            command.extend(["-v", f"{bind}/apps/ocr-parser/src:/app/src"])
+        command.extend(
+            [
+                "-v",
+                f"{bind}/datasets:/data",
+                "-v",
+                f"{bind}/outcome:/outcome",
+                "-v",
+                f"{bind}/contracts:/app/contracts:ro",
+            ]
+        )
+    else:
+        raise ValueError(f"unsupported service: {service}")
+
+    command.extend([image, "python", "-m", "src.cli", *cli_args])
+    return command
+
+
 def build_compose_command(service: str, cli_args: Sequence[str]) -> list[str]:
-    """Assemble `docker compose run --rm <service> python -m src.cli ...`."""
-    return [
-        "docker",
-        "compose",
-        "run",
-        "--rm",
-        service,
-        "python",
-        "-m",
-        "src.cli",
-        *cli_args,
-    ]
+    """Assemble job command: docker run (in console) or compose run (on host)."""
+    if _in_console_container():
+        return build_docker_run_command(service, cli_args)
+
+    command = ["docker", "compose"]
+    host_dir = os.getenv("HOST_PROJECT_DIR", "").strip()
+    if host_dir:
+        command.extend(["--project-directory", host_dir.replace("\\", "/")])
+    compose_file = _compose_file_for_client()
+    if compose_file:
+        command.extend(["-f", compose_file])
+    command.extend(
+        [
+            "run",
+            "--rm",
+            service,
+            "python",
+            "-m",
+            "src.cli",
+            *cli_args,
+        ]
+    )
+    return command
 
 
 def build_discover_urls_command(batch_id: str) -> list[str]:

@@ -65,6 +65,7 @@ def list_discovery_batches(
     discovery_root: Path,
     *,
     member_filter: str | None = None,
+    require_file: str | None = None,
 ) -> list[str]:
     if not discovery_root.exists():
         return []
@@ -74,6 +75,8 @@ def list_discovery_batches(
             continue
         name = path.name
         if member_filter and member_filter not in name:
+            continue
+        if require_file and not (path / require_file).is_file():
             continue
         batches.append(name)
     return batches

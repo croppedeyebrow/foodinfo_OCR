@@ -14,12 +14,15 @@
     <label for="batch_id">배치</label>
     <select name="batch_id" id="batch_id" required>
       {% if not batches %}
-      <option value="" disabled selected>discovery 배치 없음</option>
+      <option value="" disabled selected>선택 가능한 배치 없음</option>
       {% endif %}
       {% for batch in batches %}
       <option value="{{ batch }}" {% if batch == selected_batch %}selected{% endif %}>{{ batch }}</option>
       {% endfor %}
     </select>
+    {% if not batches and empty_batches_hint %}
+    <p class="hint">{{ empty_batches_hint }}</p>
+    {% endif %}
 
     <label>
       <input type="checkbox" name="force" value="1" style="width:auto; margin-right:0.4rem;">

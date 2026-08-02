@@ -41,12 +41,20 @@ def _suggested_batch_id() -> str:
     return f"{today}-{settings.batch_member}-001"
 
 
-def _batches(*, member_only: bool = True) -> list[str]:
+def _batches(
+    *,
+    member_only: bool = True,
+    require_file: str | None = None,
+) -> list[str]:
     settings = get_settings()
     member = settings.batch_member if member_only else None
     if member in {None, "", "unknown", "member-name"}:
         member = None
-    return list_discovery_batches(settings.discovery_root, member_filter=member)
+    return list_discovery_batches(
+        settings.discovery_root,
+        member_filter=member,
+        require_file=require_file,
+    )
 
 
 def _discover_summary(batch_id: str) -> dict | None:
@@ -136,7 +144,7 @@ def step_discover(request: Request, batch_id: str | None = None) -> HTMLResponse
 
 @app.get("/steps/collect", response_class=HTMLResponse)
 def step_collect(request: Request, batch_id: str | None = None) -> HTMLResponse:
-    batches = _batches()
+    batches = _batches(require_file="discovered_products.csv")
     selected = batch_id or (batches[0] if batches else "")
     context = _base_context("collect")
     context.update(
@@ -144,6 +152,7 @@ def step_collect(request: Request, batch_id: str | None = None) -> HTMLResponse:
             "batches": batches,
             "selected_batch": selected,
             "summary": _collect_summary(selected),
+            "empty_batches_hint": "discovered_products.csv가 있는 배치가 없습니다. 1단계 발견을 먼저 실행하세요.",
         }
     )
     return templates.TemplateResponse(request, "step_collect.html", context)
@@ -151,7 +160,7 @@ def step_collect(request: Request, batch_id: str | None = None) -> HTMLResponse:
 
 @app.get("/steps/classify", response_class=HTMLResponse)
 def step_classify(request: Request, batch_id: str | None = None) -> HTMLResponse:
-    batches = _batches()
+    batches = _batches(require_file="crawled_products.csv")
     selected = batch_id or (batches[0] if batches else "")
     context = _base_context("classify")
     context.update(
@@ -159,6 +168,7 @@ def step_classify(request: Request, batch_id: str | None = None) -> HTMLResponse
             "batches": batches,
             "selected_batch": selected,
             "summary": _classify_summary(selected),
+            "empty_batches_hint": "crawled_products.csv가 있는 배치가 없습니다. 2단계 상세 수집을 먼저 실행하세요.",
         }
     )
     return templates.TemplateResponse(request, "step_classify.html", context)
@@ -166,7 +176,7 @@ def step_classify(request: Request, batch_id: str | None = None) -> HTMLResponse
 
 @app.get("/steps/ocr", response_class=HTMLResponse)
 def step_ocr(request: Request, batch_id: str | None = None) -> HTMLResponse:
-    batches = _batches()
+    batches = _batches(require_file="crawled_products.csv")
     selected = batch_id or (batches[0] if batches else "")
     context = _base_context("ocr")
     context.update(
@@ -174,6 +184,7 @@ def step_ocr(request: Request, batch_id: str | None = None) -> HTMLResponse:
             "batches": batches,
             "selected_batch": selected,
             "summary": _ocr_summary(selected),
+            "empty_batches_hint": "crawled_products.csv가 있는 배치가 없습니다. 2단계 상세 수집을 먼저 실행하세요.",
         }
     )
     return templates.TemplateResponse(request, "step_ocr.html", context)
@@ -262,7 +273,17 @@ def job_collect(
     batch_id: str = Form(...),
     force: str | None = Form(None),
 ) -> HTMLResponse:
-    command = build_collect_details_command(batch_id.strip(), force=bool(force))
+    batch_id = batch_id.strip()
+    discovered = get_settings().discovery_batch_dir(batch_id) / "discovered_products.csv"
+    if not discovered.is_file():
+        status = runner.status()
+        status.error = (
+            f"discovered_products.csv 없음: {discovered}. 1단계 발견을 먼저 실행하세요."
+        )
+        return templates.TemplateResponse(
+            request, "partials/job_status.html", {"status": status}
+        )
+    command = build_collect_details_command(batch_id, force=bool(force))
     return _start_or_error(request, "collect", command)
 
 
@@ -272,13 +293,33 @@ def job_classify(
     batch_id: str = Form(...),
     force: str | None = Form(None),
 ) -> HTMLResponse:
-    command = build_classify_images_command(batch_id.strip(), force=bool(force))
+    batch_id = batch_id.strip()
+    crawled = get_settings().discovery_batch_dir(batch_id) / "crawled_products.csv"
+    if not crawled.is_file():
+        status = runner.status()
+        status.error = (
+            f"crawled_products.csv 없음: {crawled}. 2단계 상세 수집을 먼저 실행하세요."
+        )
+        return templates.TemplateResponse(
+            request, "partials/job_status.html", {"status": status}
+        )
+    command = build_classify_images_command(batch_id, force=bool(force))
     return _start_or_error(request, "classify", command)
 
 
 @app.post("/jobs/ocr", response_class=HTMLResponse)
 def job_ocr(request: Request, batch_id: str = Form(...)) -> HTMLResponse:
-    command = build_process_batch_command(batch_id.strip())
+    batch_id = batch_id.strip()
+    crawled = get_settings().discovery_batch_dir(batch_id) / "crawled_products.csv"
+    if not crawled.is_file():
+        status = runner.status()
+        status.error = (
+            f"crawled_products.csv 없음: {crawled}. 2단계 상세 수집을 먼저 실행하세요."
+        )
+        return templates.TemplateResponse(
+            request, "partials/job_status.html", {"status": status}
+        )
+    command = build_process_batch_command(batch_id)
     return _start_or_error(request, "ocr", command)
 
 

@@ -6,7 +6,10 @@ from pathlib import Path
 
 
 def _find_project_root() -> Path:
-    """apps/console/src/config.py → project root."""
+    """Prefer CONSOLE_PROJECT_ROOT (Docker). Else apps/console/src → project root."""
+    override = os.getenv("CONSOLE_PROJECT_ROOT", "").strip()
+    if override:
+        return Path(override)
     here = Path(__file__).resolve()
     # src → console → apps → project
     return here.parents[3]
@@ -31,11 +34,19 @@ def _load_dotenv(project_root: Path) -> None:
 def get_settings() -> "Settings":
     project_root = _find_project_root()
     _load_dotenv(project_root)
+    datasets_root = Path(os.getenv("DATASETS_ROOT", str(project_root / "datasets")))
+    outcome_root = Path(
+        os.getenv("OUTCOME_HOST_ROOT", os.getenv("OUTCOME_ROOT_HOST", ""))
+        or str(project_root / "outcome")
+    )
+    # Inside OCR containers OUTCOME_ROOT=/outcome; console on host/workspace uses ./outcome
+    if outcome_root == Path("/outcome") and not outcome_root.exists():
+        outcome_root = project_root / "outcome"
     return Settings(
         project_root=project_root,
         batch_member=os.getenv("BATCH_MEMBER", "unknown"),
-        datasets_root=project_root / "datasets",
-        outcome_root=project_root / "outcome",
+        datasets_root=datasets_root,
+        outcome_root=outcome_root,
     )
 
 

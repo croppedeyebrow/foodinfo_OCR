@@ -5,6 +5,7 @@
   <h1>2.5단계 · 이미지 텍스트 판별</h1>
   <p class="lead">crawled_products의 이미지를 판별해 image_text_check.csv를 만듭니다. NO_TEXT는 3단계에서 OCR을 건너뜁니다.</p>
   <p class="hint">Paddle 프리패스는 Windows/Linux(amd64) 환경을 권장합니다. Mac에서는 휴리스틱 폴백·UNKNOWN이 늘 수 있습니다.</p>
+  <p class="hint">2단계 상세 수집이 끝난 배치만 목록에 표시됩니다.</p>
 
   <form
     hx-post="/jobs/classify"
@@ -15,12 +16,15 @@
     <label for="batch_id">배치</label>
     <select name="batch_id" id="batch_id" required>
       {% if not batches %}
-      <option value="" disabled selected>discovery 배치 없음</option>
+      <option value="" disabled selected>선택 가능한 배치 없음</option>
       {% endif %}
       {% for batch in batches %}
       <option value="{{ batch }}" {% if batch == selected_batch %}selected{% endif %}>{{ batch }}</option>
       {% endfor %}
     </select>
+    {% if not batches and empty_batches_hint %}
+    <p class="hint">{{ empty_batches_hint }}</p>
+    {% endif %}
 
     <label>
       <input type="checkbox" name="force" value="1" style="width:auto; margin-right:0.4rem;">

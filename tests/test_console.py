@@ -21,12 +21,14 @@ sys.path[:] = [str(CONSOLE_ROOT), *cleaned]
 from src.runner import (  # noqa: E402
     JobRunner,
     JobState,
+    _docker_bind_path,
     build_classify_images_command,
     build_collect_details_command,
     build_compose_command,
     build_discover_category_command,
     build_discover_search_command,
     build_discover_urls_command,
+    build_docker_run_command,
     build_process_batch_command,
 )
 from src.summaries import (  # noqa: E402
@@ -36,13 +38,87 @@ from src.summaries import (  # noqa: E402
 )
 
 
-def test_build_compose_command_base() -> None:
+def test_build_compose_command_base(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("HOST_PROJECT_DIR", raising=False)
+    monkeypatch.delenv("COMPOSE_FILE_PATH", raising=False)
+    monkeypatch.setattr("src.runner._in_console_container", lambda: False)
     cmd = build_compose_command("crawler", ["health"])
-    assert cmd[:5] == ["docker", "compose", "run", "--rm", "crawler"]
+    assert cmd[:2] == ["docker", "compose"]
+    assert "run" in cmd and "--rm" in cmd
+    assert "crawler" in cmd
     assert cmd[-2:] == ["src.cli", "health"]
 
 
-def test_build_discover_search_command() -> None:
+def test_docker_bind_path_windows_drive() -> None:
+    assert (
+        _docker_bind_path(r"C:\Dev\work_python\crowling_ocr_parser")
+        == "/c/Dev/work_python/crowling_ocr_parser"
+    )
+    assert _docker_bind_path("/workspace") == "/workspace"
+
+
+def test_build_docker_run_command_in_container(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOST_PROJECT_DIR", r"C:\Dev\work_python\crowling_ocr_parser")
+    monkeypatch.setenv("COMPOSE_PROJECT_NAME", "kurly-freshness-pipeline")
+    monkeypatch.setattr(
+        "src.runner._data_bind_root",
+        lambda: "C:/Dev/work_python/crowling_ocr_parser",
+    )
+    monkeypatch.setattr("src.runner._in_console_container", lambda: True)
+    cmd = build_compose_command("crawler", ["discover-search", "--keyword", "x"])
+    assert cmd[0:3] == ["docker", "run", "--rm"]
+    assert "kurly-freshness-pipeline-crawler" in cmd
+    assert "src.cli" in cmd
+    assert "C:/Dev/work_python/crowling_ocr_parser/apps/crawler/src:/app/src" in cmd
+    assert any("datasets:/data" in part for part in cmd)
+
+
+def test_build_docker_run_mounts_ocr_src(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "src.runner._data_bind_root",
+        lambda: "C:/Dev/work_python/crowling_ocr_parser",
+    )
+    cmd = build_docker_run_command("ocr-parser", ["classify-images"])
+    assert (
+        "C:/Dev/work_python/crowling_ocr_parser/apps/ocr-parser/src:/app/src" in cmd
+    )
+    assert "classify-images" in cmd
+
+
+def test_data_bind_root_prefers_host_project_over_broken_mountinfo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.runner import _data_bind_root
+
+    monkeypatch.delenv("DOCKER_BIND_ROOT", raising=False)
+    monkeypatch.setenv("HOST_PROJECT_DIR", r"C:\Dev\work_python\crowling_ocr_parser")
+    monkeypatch.setattr("src.runner._workspace_bind_source_via_inspect", lambda: None)
+    monkeypatch.setattr(
+        "src.runner._workspace_mount_source",
+        lambda: "/Dev/work_python/crowling_ocr_parser",
+    )
+    assert _data_bind_root() == "C:/Dev/work_python/crowling_ocr_parser"
+
+
+def test_looks_like_usable_bind_root() -> None:
+    from src.runner import _looks_like_usable_bind_root
+
+    assert _looks_like_usable_bind_root("C:/Dev/work_python/crowling_ocr_parser")
+    assert not _looks_like_usable_bind_root("/Dev/work_python/crowling_ocr_parser")
+
+
+def test_build_docker_run_command_direct(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.runner._data_bind_root", lambda: "/host/project")
+    cmd = build_docker_run_command("ocr-parser", ["process-batch"])
+    assert "kurly-freshness-pipeline-ocr-parser" in cmd
+    assert "--platform" in cmd and "linux/amd64" in cmd
+    assert "/host/project/outcome:/outcome" in cmd
+
+
+def test_build_discover_search_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.runner._in_console_container", lambda: False)
     cmd = build_discover_search_command("20260726-jaeseong-001", "육류", 5, 3)
     assert "discover-search" in cmd
     assert "--keyword" in cmd and "육류" in cmd
@@ -73,14 +149,15 @@ def test_build_discover_category_requires_code_or_url() -> None:
         build_discover_category_command("b1", max_products=5, max_scrolls=3)
 
 
-def test_build_collect_and_classify_force() -> None:
+def test_build_collect_and_classify_force(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.runner._in_console_container", lambda: False)
     collect = build_collect_details_command("b1", force=True)
     assert "collect-details" in collect
     assert "--force" in collect
     assert "/data/discovery/b1/discovered_products.csv" in collect
 
     classify = build_classify_images_command("b1", force=True)
-    assert classify[4] == "ocr-parser"
+    assert "ocr-parser" in classify
     assert "classify-images" in classify
     assert "--force" in classify
 
@@ -138,3 +215,16 @@ def test_list_discovery_batches(tmp_path: Path) -> None:
     assert all_batches == ["20260726-sunyeong-001", "20260726-jaeseong-001"]
     filtered = list_discovery_batches(tmp_path, member_filter="jaeseong")
     assert filtered == ["20260726-jaeseong-001"]
+
+
+def test_list_discovery_batches_require_file(tmp_path: Path) -> None:
+    ready = tmp_path / "20260802-jaeseong-001"
+    ready.mkdir()
+    (ready / "discovered_products.csv").write_text("a\n1\n", encoding="utf-8")
+    (ready / "crawled_products.csv").write_text("a\n1\n", encoding="utf-8")
+    only_disc = tmp_path / "20260802-jaeseong-002"
+    only_disc.mkdir()
+    (only_disc / "discovered_products.csv").write_text("a\n1\n", encoding="utf-8")
+    assert list_discovery_batches(
+        tmp_path, require_file="crawled_products.csv"
+    ) == ["20260802-jaeseong-001"]

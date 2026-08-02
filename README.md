@@ -65,29 +65,39 @@ docker compose run --rm ocr-parser
 
 ## 단계별 실행 UI (Console)
 
-CMD 대신 브라우저에서 1 → 2 → 2.5 → 3 파라미터를 확인·실행할 수 있습니다.  
-호스트에서 FastAPI를 띄우고, 내부적으로 `docker compose run`을 호출합니다.
+브라우저에서 1 → 2 → 2.5 → 3 파라미터를 확인·실행합니다.  
+콘솔은 **Docker 컨테이너**로 뜨고, 내부에서 `docker compose run`으로 crawler / ocr-parser를 호출합니다.
 
-**공통 (Windows / Mac)**
+**공통 (Windows / Mac) — 권장**
 
 ```cmd
 python start_console.py
 ```
 
-Mac에서 `python`이 없으면:
+`start_console.py`가 호스트 프로젝트 경로(`HOST_PROJECT_DIR`)를 넘겨야  
+콘솔 컨테이너에서 crawler/ocr 작업이 정상 동작합니다.  
+(`docker compose up console`만 단독 실행하면 경로가 비어 `No module named src.cli`가 날 수 있습니다.)
 
 ```bash
+# Mac
 python3 start_console.py
 ```
 
-| OS | 더블클릭·단축 실행 |
+또는:
+
+| OS | 단축 실행 |
 |---|---|
 | Windows | `start-console.cmd` |
-| Mac / Linux | `bash start-console.sh` (최초 1회: `chmod +x start-console.sh` 후 `./start-console.sh`) |
+| Mac / Linux | `bash start-console.sh` |
 
-포트 변경 예: `python start_console.py 8790`  
-브라우저 없이: `python start_console.py --no-browser`
+직접 compose만 쓸 때:
 
+```cmd
+docker compose up --build console
+```
+
+호스트 Python으로만 띄우기 (비권장 폴백): `python start_console.py --local`  
+포트 변경: `python start_console.py 8790`  
 브라우저: [http://127.0.0.1:8787](http://127.0.0.1:8787)
 
 동시에 하나의 작업만 실행됩니다. OCR/판별은 Windows·Linux(amd64) 환경을 권장합니다.

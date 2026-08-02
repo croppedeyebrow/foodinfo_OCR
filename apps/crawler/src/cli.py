@@ -22,7 +22,7 @@ from .exporter import (
 from .kurly_page import collect_product, sleep_between_requests
 from .manifest_exporter import append_failure_csv, build_manifest_rows, write_manifest_csv
 from .models import CrawlFailureRecord, ManifestRow
-from .raw_exporter import write_raw_json
+from .raw_exporter import load_raw_json, write_raw_json
 from .url_parser import (
     InvalidCategoryError,
     InvalidProductUrlError,
@@ -221,7 +221,17 @@ def collect_details(
             raw_path = crawl_raw_dir / f"{product_id}.json"
             if product_id and raw_path.exists() and not force:
                 skip_count += 1
-                typer.echo(f"SKIP: {product_id} (crawl_raw exists)")
+                try:
+                    # Reuse existing crawl_raw so crawled_products.csv is still produced.
+                    record = load_raw_json(raw_path)
+                    record = record.model_copy(update={"batch_id": batch_id})
+                    manifest_rows.extend(build_manifest_rows(record))
+                    typer.echo(f"SKIP: {product_id} (crawl_raw exists, manifest reused)")
+                except Exception as error:  # noqa: BLE001
+                    typer.echo(
+                        f"SKIP: {product_id} (crawl_raw exists, but unloadable: {error})",
+                        err=True,
+                    )
                 continue
             if index > 0:
                 sleep_between_requests(settings.crawler_request_interval_seconds)

@@ -20,3 +20,9 @@ def write_raw_json(record: CrawledProductRecord, output_dir: Path) -> Path:
     )
     temporary_path.replace(output_path)
     return output_path
+
+
+def load_raw_json(path: Path) -> CrawledProductRecord:
+    return CrawledProductRecord.model_validate(
+        json.loads(path.read_text(encoding="utf-8"))
+    )
