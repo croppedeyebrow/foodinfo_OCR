@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260805-sunyeong-001",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "가지",
+  "requested_url": "https://www.kurly.com/search?sword=%EA%B0%80%EC%A7%80",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-05T17:44:58.140693+09:00",
+  "finished_at": "2026-08-05T17:45:00.176635+09:00",
+  "status": "COMPLETED"
+}

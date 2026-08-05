@@ -1,0 +1,4 @@
+﻿batch_id,source_site,original_product_id,product_name,product_url,image_path,error_code,error_message,failed_at
+20260805-sunyeong-001,KURLY,1002030397,[제각각] 가지 3입,https://www.kurly.com/goods/1002030397,detail_images/1002030397_01_f19edb6d9bff.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-05T18:17:30.600879+09:00
+20260805-sunyeong-001,KURLY,1001371667,[팜송] 여주 가지 2종,https://www.kurly.com/goods/1001371667,detail_images/1001371667_01_f6089e83892d.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-05T19:43:15.773190+09:00
+20260805-sunyeong-001,KURLY,1001371667,[팜송] 여주 가지 2종,https://www.kurly.com/goods/1001371667,detail_images/1001371667_02_f0b40c131a1d.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-05T19:49:20.798629+09:00
