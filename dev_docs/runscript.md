@@ -29,28 +29,29 @@ docker compose build ocr-parser
 
 ## (대안) 단계별 실행 UI
 
-콘솔은 Docker 서비스(`console`)로 실행합니다.
-
-```cmd
-python start_console.py
-```
+콘솔 앱은 Docker(`console` 서비스)로 실행합니다.  
+호스트의 `python`/`python3`는 **런처용**일 뿐이고, Mac 권장은 셸 스크립트입니다.
 
 ```bash
-# Mac
-python3 start_console.py
+# Mac / Linux (python 불필요)
+bash start-console.sh
 ```
 
-| OS | 단축 실행 |
+```cmd
+REM Windows
+start-console.cmd
+```
+
+| OS | 실행 |
 |---|---|
 | Windows | `start-console.cmd` |
 | Mac | `bash start-console.sh` |
 
-또는: `docker compose up --build console`  
-폴백(호스트 uvicorn): `python start_console.py --local`  
+Python이 있을 때: Mac은 `python3 start_console.py`, Windows는 `python start_console.py`  
 브라우저: http://127.0.0.1:8787
 
 - 1 발견 → 2 상세 → 2.5 판별 → 3 OCR
-- 실제 파이프라인은 console 컨테이너가 `docker compose run`으로 호출 (동시 1잡)
+- 실제 파이프라인은 console 컨테이너가 Docker로 crawler/ocr 호출 (동시 1잡)
 
 ---
 
