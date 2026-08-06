@@ -9,6 +9,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Sequence
 
+from .progress import count_progress_events, progress_percent
+
 
 class JobState(str, Enum):
     IDLE = "idle"
@@ -27,6 +29,9 @@ class JobStatus:
     started_at: float | None = None
     finished_at: float | None = None
     error: str = ""
+    progress_total: int | None = None
+    progress_done: int = 0
+    progress_percent: int | None = None
 
 
 def _compose_file_for_client() -> str | None:
@@ -176,17 +181,39 @@ def build_docker_run_command(service: str, cli_args: Sequence[str]) -> list[str]
     bind = _data_bind_root()
     mount_live_src = bind != "/workspace" and _looks_like_usable_bind_root(bind)
 
+    crawler_memory = os.getenv("CRAWLER_MEMORY_LIMIT", "2g")
+    crawler_shm = os.getenv("CRAWLER_SHM_SIZE", "512m")
+    ocr_memory = os.getenv("OCR_MEMORY_LIMIT", "3g")
+    ocr_shm = os.getenv("OCR_SHM_SIZE", "1g")
+
     command = ["docker", "run", "--rm"]
     if Path("/workspace/.env").is_file():
         command.extend(["--env-file", "/workspace/.env"])
 
     if service == "crawler":
-        command.extend(["--init", "--shm-size", "1g"])
+        command.extend(
+            [
+                "--init",
+                "--memory",
+                crawler_memory,
+                "--shm-size",
+                crawler_shm,
+            ]
+        )
         if mount_live_src:
             command.extend(["-v", f"{bind}/apps/crawler/src:/app/src"])
         command.extend(["-v", f"{bind}/datasets:/data"])
     elif service == "ocr-parser":
-        command.extend(["--shm-size", "2g", "--platform", "linux/amd64"])
+        command.extend(
+            [
+                "--memory",
+                ocr_memory,
+                "--shm-size",
+                ocr_shm,
+                "--platform",
+                "linux/amd64",
+            ]
+        )
         if mount_live_src:
             command.extend(["-v", f"{bind}/apps/ocr-parser/src:/app/src"])
         command.extend(
@@ -317,17 +344,24 @@ def build_classify_images_command(batch_id: str, *, force: bool = False) -> list
     return build_compose_command("ocr-parser", args)
 
 
-def build_process_batch_command(batch_id: str) -> list[str]:
-    return build_compose_command(
-        "ocr-parser",
-        [
-            "process-batch",
-            "--manifest",
-            f"/data/discovery/{batch_id}/crawled_products.csv",
-            "--batch-id",
-            batch_id,
-        ],
-    )
+def build_process_batch_command(
+    batch_id: str,
+    *,
+    offset: int = 0,
+    limit: int | None = None,
+) -> list[str]:
+    args = [
+        "process-batch",
+        "--manifest",
+        f"/data/discovery/{batch_id}/crawled_products.csv",
+        "--batch-id",
+        batch_id,
+    ]
+    if offset:
+        args.extend(["--offset", str(offset)])
+    if limit is not None:
+        args.extend(["--limit", str(limit)])
+    return build_compose_command("ocr-parser", args)
 
 
 class JobRunner:
@@ -350,9 +384,18 @@ class JobRunner:
                 started_at=self._status.started_at,
                 finished_at=self._status.finished_at,
                 error=self._status.error,
+                progress_total=self._status.progress_total,
+                progress_done=self._status.progress_done,
+                progress_percent=self._status.progress_percent,
             )
 
-    def start(self, step: str, command: list[str]) -> JobStatus:
+    def start(
+        self,
+        step: str,
+        command: list[str],
+        *,
+        progress_total: int | None = None,
+    ) -> JobStatus:
         with self._lock:
             if self._status.state == JobState.RUNNING:
                 raise RuntimeError("A job is already running")
@@ -365,6 +408,9 @@ class JobRunner:
                 started_at=time.time(),
                 finished_at=None,
                 error="",
+                progress_total=progress_total,
+                progress_done=0,
+                progress_percent=progress_percent(0, progress_total),
             )
         thread = threading.Thread(
             target=self._run,
@@ -375,9 +421,20 @@ class JobRunner:
         thread.start()
         return self.status()
 
+    def _refresh_progress_locked(self) -> None:
+        done = count_progress_events(self._status.step, self._status.log)
+        total = self._status.progress_total
+        if total is not None:
+            done = min(done, total)
+        if self._status.state in {JobState.SUCCEEDED, JobState.FAILED} and total:
+            done = total if self._status.state == JobState.SUCCEEDED else min(done, total)
+        self._status.progress_done = done
+        self._status.progress_percent = progress_percent(done, total)
+
     def _append_log(self, text: str) -> None:
         with self._lock:
             self._status.log += text
+            self._refresh_progress_locked()
 
     def _run(self, command: list[str]) -> None:
         try:
@@ -404,11 +461,13 @@ class JobRunner:
                 )
                 if exit_code != 0:
                     self._status.error = f"exit_code={exit_code}"
+                self._refresh_progress_locked()
         except Exception as error:  # noqa: BLE001
             with self._lock:
                 self._status.finished_at = time.time()
                 self._status.state = JobState.FAILED
                 self._status.error = str(error)
                 self._status.log += f"\n[console] failed to start: {error}\n"
+                self._refresh_progress_locked()
         finally:
             self._process = None

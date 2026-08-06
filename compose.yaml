@@ -44,14 +44,17 @@ services:
       - ./datasets:/data
       - ./tests:/app/tests:ro
     init: true
-    shm_size: "1gb"
+    # Playwright needs shared memory; keep modest defaults for laptops.
+    shm_size: "${CRAWLER_SHM_SIZE:-512m}"
+    mem_limit: "${CRAWLER_MEMORY_LIMIT:-2g}"
     command: ["python", "-m", "src.cli", "health"]
 
   ocr-parser:
     build:
       context: .
       dockerfile: docker/ocr-parser.Dockerfile
-    shm_size: "2gb"
+    shm_size: "${OCR_SHM_SIZE:-1g}"
+    mem_limit: "${OCR_MEMORY_LIMIT:-3g}"
     platform: linux/amd64
     env_file:
       - .env

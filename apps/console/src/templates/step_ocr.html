@@ -26,6 +26,18 @@
     <p class="hint">{{ empty_batches_hint }}</p>
     {% endif %}
 
+    <div class="row">
+      <div>
+        <label for="offset">offset (청크 시작, 기본 0)</label>
+        <input type="number" name="offset" id="offset" value="0" min="0">
+      </div>
+      <div>
+        <label for="limit">limit (이번 처리 개수, 비우면 전체)</label>
+        <input type="number" name="limit" id="limit" min="1" placeholder="예: 10">
+      </div>
+    </div>
+    <p class="hint">메모리 부담이 크면 limit=10처럼 나눠 실행하세요. 다음 청크는 offset을 이어서 올리면 됩니다.</p>
+
     <div class="actions">
       <button type="submit" {% if not batches %}disabled{% endif %}>OCR 실행</button>
     </div>

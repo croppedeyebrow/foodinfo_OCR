@@ -50,6 +50,8 @@ start-console.cmd
 Python이 있을 때: Mac은 `python3 start_console.py`, Windows는 `python start_console.py`  
 브라우저: http://127.0.0.1:8787
 
+Docker Desktop이 꺼져 있으면 실행 여부를 묻고 엔진 준비까지 대기합니다 (`-y`로 생략 가능).
+
 - 1 발견 → 2 상세 → 2.5 판별 → 3 OCR
 - 실제 파이프라인은 console 컨테이너가 Docker로 crawler/ocr 호출 (동시 1잡)
 
@@ -173,7 +175,14 @@ datasets\discovery\{배치ID}\image_text_check.csv
 docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
 ```
 
-`.env`의 `BATCH_MEMBER`와 다른 팀원 배치는 자동으로 건너뜁니다.
+청크 실행 예:
+
+```cmd
+docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001 --offset 0 --limit 10
+```
+
+`.env`의 `BATCH_MEMBER`와 다른 팀원 배치는 자동으로 건너뜁니다.  
+큰 이미지는 `OCR_MAX_IMAGE_SIDE`(기본 1600)로 줄여 OCR합니다.
 
 ### 3단계 결과
 

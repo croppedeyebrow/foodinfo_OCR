@@ -13,6 +13,7 @@ from .exporter import (
     load_existing_source_keys,
     write_raw_json,
 )
+from .image_preprocess import prepare_image_for_ocr
 from .merge_policy import merge_field, overall_validation_status
 from .models import MergedProductRecord, ProductInput, RawOcrRecord
 from .ocr_engine import PaddleOcrEngine
@@ -126,7 +127,12 @@ class ProductOcrPipeline:
             return None, csv_path
 
         collected_at = datetime.now(KST)
-        ocr_result = self.engine.recognize(image_path)
+        ocr_input, is_temp = prepare_image_for_ocr(image_path)
+        try:
+            ocr_result = self.engine.recognize(ocr_input)
+        finally:
+            if is_temp:
+                ocr_input.unlink(missing_ok=True)
         if not ocr_result.full_text.strip():
             raise ValueError("OCR_TEXT_EMPTY")
 

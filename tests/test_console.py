@@ -111,9 +111,13 @@ def test_looks_like_usable_bind_root() -> None:
 
 def test_build_docker_run_command_direct(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("src.runner._data_bind_root", lambda: "/host/project")
+    monkeypatch.setenv("OCR_MEMORY_LIMIT", "3g")
+    monkeypatch.setenv("OCR_SHM_SIZE", "1g")
     cmd = build_docker_run_command("ocr-parser", ["process-batch"])
     assert "kurly-freshness-pipeline-ocr-parser" in cmd
     assert "--platform" in cmd and "linux/amd64" in cmd
+    assert "--memory" in cmd and "3g" in cmd
+    assert "--shm-size" in cmd and "1g" in cmd
     assert "/host/project/outcome:/outcome" in cmd
 
 
@@ -167,6 +171,14 @@ def test_build_process_batch_command() -> None:
     assert "process-batch" in cmd
     assert "/data/discovery/b1/crawled_products.csv" in cmd
     assert "--batch-id" in cmd and "b1" in cmd
+    assert "--offset" not in cmd
+    assert "--limit" not in cmd
+
+
+def test_build_process_batch_command_chunk() -> None:
+    cmd = build_process_batch_command("b1", offset=10, limit=5)
+    assert "--offset" in cmd and "10" in cmd
+    assert "--limit" in cmd and "5" in cmd
 
 
 def test_job_runner_rejects_second_job() -> None:

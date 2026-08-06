@@ -5,6 +5,35 @@
     {% if status.step %}· 단계 <strong>{{ status.step }}</strong>{% endif %}
     {% if status.exit_code is not none %}· exit {{ status.exit_code }}{% endif %}
   </p>
+  {% if status.progress_total %}
+  <div class="progress-block" aria-label="진행률">
+    <div class="progress-meta">
+      <span>진행률</span>
+      <span>
+        {{ status.progress_done }} / {{ status.progress_total }}
+        {% if status.progress_percent is not none %}
+        ({{ status.progress_percent }}%)
+        {% endif %}
+      </span>
+    </div>
+    <div class="progress-track">
+      <div
+        class="progress-fill {% if status.state.value == 'running' %}pulse{% endif %}"
+        style="width: {{ status.progress_percent or 0 }}%;"
+      ></div>
+    </div>
+  </div>
+  {% elif status.state.value == 'running' %}
+  <div class="progress-block" aria-label="진행 중">
+    <div class="progress-meta">
+      <span>진행률</span>
+      <span>측정 중…</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill pulse indeterminate"></div>
+    </div>
+  </div>
+  {% endif %}
   {% if status.command %}
   <p><code>{{ status.command | join(" ") }}</code></p>
   {% endif %}

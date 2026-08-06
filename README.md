@@ -87,6 +87,9 @@ REM Windows
 start-console.cmd
 ```
 
+Docker Desktop이 꺼져 있으면 실행 여부를 묻고, 엔진이 준비될 때까지 대기합니다.  
+프롬프트 없이 바로 켜려면: `bash start-console.sh -y` / `start-console.cmd -y` / `python start_console.py -y`
+
 런처가 `HOST_PROJECT_DIR`을 넘깁니다. 이게 있어야 콘솔 안에서 crawler/ocr 마운트가 맞습니다.
 
 Python이 있는 환경에서 동일하게:
@@ -214,6 +217,16 @@ datasets/discovery/{배치ID}/image_text_check.csv
 ```cmd
 docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
 ```
+
+메모리 부담이 크면 청크로 나눕니다 (`NO_TEXT` 제외 후 기준):
+
+```cmd
+docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001 --offset 0 --limit 10
+
+docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001 --offset 10 --limit 10
+```
+
+큰 이미지는 OCR 전에 긴 변 `OCR_MAX_IMAGE_SIDE`(기본 1600)로 축소합니다. `.env`에서 조절하고, `0`이면 리사이즈를 끕니다.
 
 `.env`의 `BATCH_MEMBER`가 포함된 `batch_id` 행만 처리합니다.
 

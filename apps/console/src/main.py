@@ -204,9 +204,15 @@ def job_status(request: Request) -> HTMLResponse:
     )
 
 
-def _start_or_error(request: Request, step: str, command: list[str]) -> HTMLResponse:
+def _start_or_error(
+    request: Request,
+    step: str,
+    command: list[str],
+    *,
+    progress_total: int | None = None,
+) -> HTMLResponse:
     try:
-        status = runner.start(step, command)
+        status = runner.start(step, command, progress_total=progress_total)
     except RuntimeError as error:
         status = runner.status()
         status.error = str(error)
@@ -233,6 +239,7 @@ def job_discover(
     try:
         if mode == "urls":
             command = build_discover_urls_command(batch_id)
+            progress_total = None
         elif mode == "search":
             if not keyword.strip():
                 raise ValueError("검색 모드에는 keyword가 필요합니다")
@@ -242,6 +249,7 @@ def job_discover(
                 max_products,
                 max_scrolls,
             )
+            progress_total = max_products
         elif mode == "category":
             code = category_code.strip()
             url = category_url.strip()
@@ -254,6 +262,7 @@ def job_discover(
                 max_products=max_products,
                 max_scrolls=max_scrolls,
             )
+            progress_total = max_products
         else:
             raise ValueError(f"알 수 없는 모드: {mode}")
     except ValueError as error:
@@ -264,7 +273,9 @@ def job_discover(
             "partials/job_status.html",
             {"status": status},
         )
-    return _start_or_error(request, "discover", command)
+    return _start_or_error(
+        request, "discover", command, progress_total=progress_total
+    )
 
 
 @app.post("/jobs/collect", response_class=HTMLResponse)
@@ -284,7 +295,8 @@ def job_collect(
             request, "partials/job_status.html", {"status": status}
         )
     command = build_collect_details_command(batch_id, force=bool(force))
-    return _start_or_error(request, "collect", command)
+    total = count_csv_rows(discovered).row_count
+    return _start_or_error(request, "collect", command, progress_total=total)
 
 
 @app.post("/jobs/classify", response_class=HTMLResponse)
@@ -304,11 +316,17 @@ def job_classify(
             request, "partials/job_status.html", {"status": status}
         )
     command = build_classify_images_command(batch_id, force=bool(force))
-    return _start_or_error(request, "classify", command)
+    total = count_csv_rows(crawled).row_count
+    return _start_or_error(request, "classify", command, progress_total=total)
 
 
 @app.post("/jobs/ocr", response_class=HTMLResponse)
-def job_ocr(request: Request, batch_id: str = Form(...)) -> HTMLResponse:
+def job_ocr(
+    request: Request,
+    batch_id: str = Form(...),
+    offset: int = Form(0),
+    limit: str = Form(""),
+) -> HTMLResponse:
     batch_id = batch_id.strip()
     crawled = get_settings().discovery_batch_dir(batch_id) / "crawled_products.csv"
     if not crawled.is_file():
@@ -319,8 +337,34 @@ def job_ocr(request: Request, batch_id: str = Form(...)) -> HTMLResponse:
         return templates.TemplateResponse(
             request, "partials/job_status.html", {"status": status}
         )
-    command = build_process_batch_command(batch_id)
-    return _start_or_error(request, "ocr", command)
+    limit_value: int | None = None
+    if str(limit).strip():
+        try:
+            limit_value = int(str(limit).strip())
+            if limit_value < 1:
+                raise ValueError
+        except ValueError:
+            status = runner.status()
+            status.error = "limit은 1 이상의 정수여야 합니다."
+            return templates.TemplateResponse(
+                request, "partials/job_status.html", {"status": status}
+            )
+    if offset < 0:
+        status = runner.status()
+        status.error = "offset은 0 이상이어야 합니다."
+        return templates.TemplateResponse(
+            request, "partials/job_status.html", {"status": status}
+        )
+
+    command = build_process_batch_command(
+        batch_id, offset=offset, limit=limit_value
+    )
+    total = count_csv_rows(crawled).row_count
+    if limit_value is not None:
+        total = min(max(0, total - offset), limit_value)
+    elif offset:
+        total = max(0, total - offset)
+    return _start_or_error(request, "ocr", command, progress_total=total)
 
 
 @app.get("/health")

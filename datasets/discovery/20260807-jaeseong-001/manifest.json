@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260807-jaeseong-001",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "모닝빵",
+  "requested_url": "https://www.kurly.com/search?sword=%EB%AA%A8%EB%8B%9D%EB%B9%B5",
+  "max_products": 3,
+  "max_scrolls": 2,
+  "discovered_count": 3,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-07T00:03:51.714524+09:00",
+  "finished_at": "2026-08-07T00:04:02.632708+09:00",
+  "status": "COMPLETED"
+}

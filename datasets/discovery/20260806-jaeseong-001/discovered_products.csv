@@ -1,0 +1,4 @@
+﻿schema_version,batch_id,source_site,source_mode,source_value,original_product_id,product_name_preview,product_url,discovery_order,discovered_at,discovery_status
+1.0,20260806-jaeseong-001,KURLY,SEARCH,블루베리잼,1000213809,"담기 샛별배송 [마이노멀] 저당 저칼로리 블루베리잼 320g 마음껏 즐길 수 있는 달달한 잼 12,980원 10%11,680원 999+",https://www.kurly.com/goods/1000213809,1,2026-08-06T23:39:10.563682+09:00,DISCOVERED
+1.0,20260806-jaeseong-001,KURLY,SEARCH,블루베리잼,1001385477,"담기 샛별배송 [샹달프] 과일잼 284g 9종 (택1) 설탕 대신 과일즙으로낸 단맛 7,480원 12%6,580원~ 9,999+",https://www.kurly.com/goods/1001385477,2,2026-08-06T23:39:10.563825+09:00,DISCOVERED
+1.0,20260806-jaeseong-001,KURLY,SEARCH,블루베리잼,5115048,"담기 샛별배송 [다보] 과일함량 70% 과일잼 5종 오스트리아에서 온 과일잼 5,480원 9,999+",https://www.kurly.com/goods/5115048,3,2026-08-06T23:39:10.563863+09:00,DISCOVERED

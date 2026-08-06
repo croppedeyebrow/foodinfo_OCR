@@ -200,12 +200,25 @@ def process_batch(
         help="처리할 배치 ID. 생략 시 BATCH_MEMBER 소속 배치만 처리",
     ),
     data_root: Path = typer.Option(Path("/data"), "--data-root"),
+    offset: int = typer.Option(
+        0,
+        "--offset",
+        min=0,
+        help="OCR 대상 행 중 건너뛸 개수 (NO_TEXT 제외 후 기준)",
+    ),
+    limit: int | None = typer.Option(
+        None,
+        "--limit",
+        min=1,
+        help="이번에 처리할 최대 행 수 (NO_TEXT 제외 후 기준). 미지정 시 전부",
+    ),
 ) -> None:
     """입력 manifest CSV의 상품을 순차 처리한다.
 
     기본적으로 `.env`의 BATCH_MEMBER가 들어간 batch_id 행만 처리한다.
     `--batch-id`를 주면 해당 배치만 처리한다.
     image_text_check.csv가 있으면 NO_TEXT 이미지는 OCR을 건너뛴다.
+    `--offset` / `--limit`으로 OCR 대상을 청크 단위로 나눌 수 있다.
     """
     outcome_root = Path(os.getenv("OUTCOME_ROOT", "/outcome"))
     member = os.getenv("BATCH_MEMBER", "unknown")
@@ -245,6 +258,7 @@ def process_batch(
     filtered_out = 0
     no_text_skipped = 0
 
+    eligible_rows: list[dict[str, str]] = []
     with manifest.open("r", encoding="utf-8-sig", newline="") as file:
         for row in csv.DictReader(file):
             row_batch_id = (row.get("batch_id") or "").strip()
@@ -264,43 +278,59 @@ def process_batch(
                     no_text_skipped += 1
                     typer.echo(f"SKIP_NO_TEXT: {image_rel}")
                     continue
+            eligible_rows.append(row)
 
-            try:
-                normalized_row = {
-                    key: (value if value != "" else None) for key, value in row.items()
-                }
-                if normalized_row.get("source_site") is None:
-                    normalized_row["source_site"] = "KURLY"
-                product = ProductInput(**normalized_row)
-                raw_path, csv_path = pipeline.process(product, data_root)
-                if raw_path is None:
-                    skipped_count += 1
-                success_count += 1
-                typer.echo(f"OK: {product.original_product_id} -> {csv_path}")
-            except Exception as error:  # 배치 전체 중단 방지
-                failure_count += 1
-                fail_batch_id = row_batch_id or "UNKNOWN_BATCH"
-                failure = FailureRecord(
-                    batch_id=fail_batch_id,
-                    source_site=row.get("source_site") or "KURLY",
-                    original_product_id=row.get("original_product_id", ""),
-                    product_name=row.get("product_name", ""),
-                    product_url=row.get("product_url", ""),
-                    image_path=row.get("image_path", "") or "",
-                    error_code=_error_code(error),
-                    error_message=str(error),
-                    failed_at=datetime.now(KST),
-                )
-                append_failure_csv(
-                    failure,
-                    outcome_root / member / fail_batch_id / "failures.csv",
-                )
-                typer.echo(f"FAILED: {failure.original_product_id}: {error}", err=True)
+    end = None if limit is None else offset + limit
+    chunk_rows = eligible_rows[offset:end]
+    typer.echo(
+        f"Chunk: offset={offset}, limit={limit if limit is not None else 'all'}, "
+        f"eligible={len(eligible_rows)}, processing={len(chunk_rows)}"
+    )
 
-    if success_count == 0 and failure_count == 0 and no_text_skipped == 0:
+    for row in chunk_rows:
+        row_batch_id = (row.get("batch_id") or "").strip()
+        try:
+            normalized_row = {
+                key: (value if value != "" else None) for key, value in row.items()
+            }
+            if normalized_row.get("source_site") is None:
+                normalized_row["source_site"] = "KURLY"
+            product = ProductInput(**normalized_row)
+            raw_path, csv_path = pipeline.process(product, data_root)
+            if raw_path is None:
+                skipped_count += 1
+            success_count += 1
+            typer.echo(f"OK: {product.original_product_id} -> {csv_path}")
+        except Exception as error:  # 배치 전체 중단 방지
+            failure_count += 1
+            fail_batch_id = row_batch_id or "UNKNOWN_BATCH"
+            failure = FailureRecord(
+                batch_id=fail_batch_id,
+                source_site=row.get("source_site") or "KURLY",
+                original_product_id=row.get("original_product_id", ""),
+                product_name=row.get("product_name", ""),
+                product_url=row.get("product_url", ""),
+                image_path=row.get("image_path", "") or "",
+                error_code=_error_code(error),
+                error_message=str(error),
+                failed_at=datetime.now(KST),
+            )
+            append_failure_csv(
+                failure,
+                outcome_root / member / fail_batch_id / "failures.csv",
+            )
+            typer.echo(f"FAILED: {failure.original_product_id}: {error}", err=True)
+
+    if (
+        success_count == 0
+        and failure_count == 0
+        and no_text_skipped == 0
+        and not chunk_rows
+    ):
         typer.echo(
             f"No rows matched. BATCH_MEMBER={member}, "
-            f"batch_id={batch_id or '(member filter)'}, filtered_out={filtered_out}",
+            f"batch_id={batch_id or '(member filter)'}, filtered_out={filtered_out}, "
+            f"offset={offset}, limit={limit}",
             err=True,
         )
         raise typer.Exit(code=1)
@@ -308,7 +338,8 @@ def process_batch(
     typer.echo(
         f"Completed: success={success_count}, failure={failure_count}, "
         f"skipped={skipped_count}, no_text_skipped={no_text_skipped}, "
-        f"filtered_out={filtered_out}, member={member}"
+        f"filtered_out={filtered_out}, offset={offset}, "
+        f"limit={limit if limit is not None else 'all'}, member={member}"
     )
 
 
