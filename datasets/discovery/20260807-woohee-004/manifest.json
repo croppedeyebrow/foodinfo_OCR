@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260807-woohee-004",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "애호박",
+  "requested_url": "https://www.kurly.com/search?sword=%EC%95%A0%ED%98%B8%EB%B0%95",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-07T18:04:37.237998+09:00",
+  "finished_at": "2026-08-07T18:04:41.743280+09:00",
+  "status": "COMPLETED"
+}

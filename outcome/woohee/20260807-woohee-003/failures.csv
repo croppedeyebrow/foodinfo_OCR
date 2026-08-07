@@ -1,0 +1,4 @@
+﻿batch_id,source_site,original_product_id,product_name,product_url,image_path,error_code,error_message,failed_at
+20260807-woohee-003,KURLY,5054657,[KF365] 백다다기오이 3입,https://www.kurly.com/goods/5054657,detail_images/5054657_01_3cc89f87876b.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-07T17:50:12.112049+09:00
+20260807-woohee-003,KURLY,5000333,친환경 백다다기오이 2입,https://www.kurly.com/goods/5000333,detail_images/5000333_01_cbfc6f6d1a65.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-07T17:51:52.772299+09:00
+20260807-woohee-003,KURLY,1001328413,공주 오이 5입,https://www.kurly.com/goods/1001328413,detail_images/1001328413_02_5514b48a819d.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-07T17:57:22.426679+09:00

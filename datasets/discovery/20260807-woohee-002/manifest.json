@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260807-woohee-002",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "양파",
+  "requested_url": "https://www.kurly.com/search?sword=%EC%96%91%ED%8C%8C",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-07T17:18:08.972584+09:00",
+  "finished_at": "2026-08-07T17:18:13.193159+09:00",
+  "status": "COMPLETED"
+}

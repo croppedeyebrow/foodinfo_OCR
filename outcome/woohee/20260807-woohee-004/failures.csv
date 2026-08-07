@@ -1,0 +1,5 @@
+﻿batch_id,source_site,original_product_id,product_name,product_url,image_path,error_code,error_message,failed_at
+20260807-woohee-004,KURLY,5030559,[KF365] 애호박 1개,https://www.kurly.com/goods/5030559,detail_images/5030559_01_d77f838d81f9.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-07T18:17:30.976135+09:00
+20260807-woohee-004,KURLY,1000178609,[제각각] 애호박 3입,https://www.kurly.com/goods/1000178609,detail_images/1000178609_01_8d1492838888.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-07T18:22:34.610814+09:00
+20260807-woohee-004,KURLY,1001388590,[온하루] 애호박 떡갈비,https://www.kurly.com/goods/1001388590,detail_images/1001388590_01_fa835fd89285.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-07T18:25:19.016890+09:00
+20260807-woohee-004,KURLY,1001388590,[온하루] 애호박 떡갈비,https://www.kurly.com/goods/1001388590,detail_images/1001388590_03_48a24ea5d7b9.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-07T18:25:51.024216+09:00

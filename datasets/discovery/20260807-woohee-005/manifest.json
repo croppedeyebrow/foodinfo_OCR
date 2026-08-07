@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260807-woohee-005",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "파프리카",
+  "requested_url": "https://www.kurly.com/search?sword=%ED%8C%8C%ED%94%84%EB%A6%AC%EC%B9%B4",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-07T18:28:53.033914+09:00",
+  "finished_at": "2026-08-07T18:28:55.128391+09:00",
+  "status": "COMPLETED"
+}

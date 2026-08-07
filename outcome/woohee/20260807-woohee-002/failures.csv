@@ -1,0 +1,5 @@
+﻿batch_id,source_site,original_product_id,product_name,product_url,image_path,error_code,error_message,failed_at
+20260807-woohee-002,KURLY,5026451,양파 1.5kg,https://www.kurly.com/goods/5026451,detail_images/5026451_01_d09a9106d1ee.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-07T17:34:48.393137+09:00
+20260807-woohee-002,KURLY,1001227997,[바름팜] 창녕 양파 1.5kg,https://www.kurly.com/goods/1001227997,detail_images/1001227997_01_87e3057c7fb9.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-07T17:35:48.949835+09:00
+20260807-woohee-002,KURLY,5000072,[바름팜] 친환경 양파 2종,https://www.kurly.com/goods/5000072,detail_images/5000072_01_23cf9e65b6c2.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-07T17:36:34.090237+09:00
+20260807-woohee-002,KURLY,1001542395,[제각각] 양파 1.5kg,https://www.kurly.com/goods/1001542395,detail_images/1001542395_01_c04489c4fe29.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-07T17:40:14.504710+09:00
