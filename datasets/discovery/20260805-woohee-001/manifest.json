@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260805-woohee-001",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "오리고기",
+  "requested_url": "https://www.kurly.com/search?sword=%EC%98%A4%EB%A6%AC%EA%B3%A0%EA%B8%B0",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-05T17:27:44.392024+09:00",
+  "finished_at": "2026-08-05T17:27:46.513944+09:00",
+  "status": "COMPLETED"
+}
