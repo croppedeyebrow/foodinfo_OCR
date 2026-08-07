@@ -24,6 +24,7 @@ def _resolve_app_root(app_name: str) -> Path:
     marker_files = {
         "crawler": docker_app / "src" / "url_parser.py",
         "ocr-parser": docker_app / "src" / "merge_policy.py",
+        "normalizer": docker_app / "src" / "contracts.py",
     }
     marker = marker_files.get(app_name)
     if marker is not None and marker.exists():
@@ -33,7 +34,7 @@ def _resolve_app_root(app_name: str) -> Path:
 
 
 def use_app(app_name: str) -> Path:
-    """테스트에서 crawler/ocr-parser 중 하나의 src 패키지를 활성화한다."""
+    """테스트에서 crawler/ocr-parser/normalizer 중 하나의 src 패키지를 활성화한다."""
     app_root = _resolve_app_root(app_name)
     _clear_src_modules()
     cleaned = [
@@ -41,6 +42,8 @@ def use_app(app_name: str) -> Path:
         for path in sys.path
         if "apps/crawler" not in path.replace("\\", "/")
         and "apps/ocr-parser" not in path.replace("\\", "/")
+        and "apps/console" not in path.replace("\\", "/")
+        and "apps/normalizer" not in path.replace("\\", "/")
     ]
     sys.path[:] = [str(app_root), *cleaned]
     return app_root

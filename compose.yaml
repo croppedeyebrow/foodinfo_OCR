@@ -76,6 +76,8 @@ services:
       - ./apps/normalizer/src:/app/src
       - ./contracts:/app/contracts:ro
       - ./datasets:/data
+      - ./outcome:/outcome
+      - ./tests:/app/tests:ro
     depends_on:
       postgres:
         condition: service_healthy

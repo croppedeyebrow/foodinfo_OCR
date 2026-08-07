@@ -1,4 +1,9 @@
-컬리 상품 발견(Discovery) 기능 확장 구현 지시서
+> 상태: COMPLETED / ARCHIVED
+>
+> 상품 발견 기능의 초기 구현 지시서다. 현재 개발 지시로 실행하지 않는다.
+> 현재 기준은 `dev_order/README.md`와 `dev_docs/data_platform`을 따른다.
+
+# 컬리 상품 발견(Discovery) 기능 확장 구현 지시서
 
 0. AI IDE에 전달할 최상위 명령
 

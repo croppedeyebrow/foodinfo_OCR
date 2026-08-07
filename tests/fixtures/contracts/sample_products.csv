@@ -1,0 +1,3 @@
+schema_version,batch_id,source_site,original_product_id,product_name_raw,food_name_candidate,product_url,sales_unit_raw,weight_raw,quantity_raw,food_type_raw,food_type_source,expiration_info_raw,expiration_source,storage_method_raw,storage_source,storage_type,ocr_confidence,crawl_collected_at,ocr_collected_at,parser_version,validation_status,parse_status,source_record_id,image_sha256
+1.0,20260808-jaeseong-001,KURLY,1000001,테스트 사과 1kg,사과,https://www.kurly.com/goods/1000001,,1kg,,,NOT_FOUND,제조일로부터 7일,DOM,냉장 보관,DOM,REFRIGERATED,,,,0.2.0,MATCHED,COMPLETED,KURLY:1000001,
+1.0,20260808-jaeseong-001,KURLY,1000002,테스트 바나나 1kg,바나나,https://www.kurly.com/goods/1000002,,1kg,,,NOT_FOUND,구매일로부터 5일,DOM,상온 보관,DOM,ROOM,,,,0.2.0,MATCHED,COMPLETED,KURLY:1000002,

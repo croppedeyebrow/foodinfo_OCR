@@ -16,6 +16,10 @@ datasets/ocr_raw/*
 datasets/ocr_output/*
 datasets/crawl_raw/*
 datasets/detail_images/*
+datasets/inbox/accepted/*
+datasets/silver/*
+datasets/gold/*
+datasets/quarantine/*
 datasets/input/crawled_products.csv
 
 !datasets/images/.gitkeep
@@ -24,3 +28,7 @@ datasets/input/crawled_products.csv
 !datasets/ocr_output/.gitkeep
 !datasets/crawl_raw/.gitkeep
 !datasets/detail_images/.gitkeep
+!datasets/inbox/accepted/.gitkeep
+!datasets/silver/.gitkeep
+!datasets/gold/.gitkeep
+!datasets/quarantine/.gitkeep

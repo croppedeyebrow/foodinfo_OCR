@@ -7,7 +7,8 @@
 - `crawler`: Playwright 기반 상품 발견 및 상세페이지 수집
 - `ocr-parser`: PaddleOCR 기반 OCR, DOM·OCR 병합, 최종 CSV
 - `console`: FastAPI 단계별 실행 UI (`docker compose` CLI 호출)
-- `normalizer`: (추후) KFIA 기준 통합 정제
+- `normalizer`: 계약 검증·products.csv adapter·(추후) Silver 정제 / PostgreSQL
+- `contracts/`: versioned JSON Schema (`collection_submission`, Kurly/MFDS raw, Silver/Gold 등)
 - `postgres`: (추후) 정제 데이터 적재
 
 원본 이미지·크롤/OCR 원문 JSON은 `datasets`에 저장되며 Git에서 제외됩니다.  

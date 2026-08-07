@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neulsom.local/schemas/kurly-raw-product-1.0.0.json",
+  "title": "Kurly bronze raw product",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "run_id",
+    "batch_id",
+    "record_id",
+    "source",
+    "source_record_id",
+    "content_hash",
+    "parser_version",
+    "created_at",
+    "original_product_id",
+    "product_url"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "batch_id": { "type": "string", "minLength": 1 },
+    "record_id": { "type": "string", "minLength": 1 },
+    "source": { "const": "KURLY" },
+    "source_record_id": { "type": "string", "minLength": 1 },
+    "source_uri": { "type": ["string", "null"] },
+    "content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "parser_version": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "original_product_id": { "type": "string", "minLength": 1 },
+    "product_name_raw": { "type": ["string", "null"] },
+    "product_url": { "type": "string", "minLength": 1 },
+    "requested_url": { "type": ["string", "null"] },
+    "food_name_candidate": { "type": ["string", "null"] },
+    "sales_unit_raw": { "type": ["string", "null"] },
+    "weight_raw": { "type": ["string", "null"] },
+    "quantity_raw": { "type": ["string", "null"] },
+    "expiration_info_dom": { "type": ["string", "null"] },
+    "storage_method_dom": { "type": ["string", "null"] },
+    "storage_type_dom": { "type": ["string", "null"] },
+    "detail_image_urls": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "local_image_paths": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "crawl_status": { "type": ["string", "null"] },
+    "collected_at": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

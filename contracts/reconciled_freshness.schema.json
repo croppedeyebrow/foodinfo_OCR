@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neulsom.local/schemas/reconciled-freshness-1.0.0.json",
+  "title": "Reconciled freshness candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "batch_id",
+    "record_id",
+    "source",
+    "source_record_id",
+    "content_hash",
+    "parser_version",
+    "created_at",
+    "kurly_record_id",
+    "review_status",
+    "match_type",
+    "confidence",
+    "rule_id",
+    "rule_version",
+    "selected_source"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "batch_id": { "type": "string", "minLength": 1 },
+    "record_id": { "type": "string", "minLength": 1 },
+    "source": { "const": "RECONCILER" },
+    "source_record_id": { "type": "string", "minLength": 1 },
+    "source_uri": { "type": ["string", "null"] },
+    "content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "parser_version": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "kurly_record_id": { "type": "string", "minLength": 1 },
+    "mfds_record_id": { "type": ["string", "null"] },
+    "review_status": {
+      "type": "string",
+      "enum": ["APPROVED", "REVIEW_REQUIRED", "REJECTED"]
+    },
+    "match_type": { "type": "string", "minLength": 1 },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "rule_id": { "type": "string", "minLength": 1 },
+    "rule_version": { "type": "string", "minLength": 1 },
+    "selected_source": {
+      "type": "string",
+      "enum": ["KURLY", "MFDS", "MANUAL", "NONE"]
+    },
+    "kurly_expiration_text": { "type": ["string", "null"] },
+    "mfds_expiration_text": { "type": ["string", "null"] },
+    "selected_expiration_text": { "type": ["string", "null"] },
+    "selected_storage_type": {
+      "type": ["string", "null"],
+      "enum": ["REFRIGERATED", "FROZEN", "ROOM", "UNKNOWN", null]
+    }
+  }
+}

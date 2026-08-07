@@ -1,0 +1,13 @@
+{
+  "schema_version": "2.0.0",
+  "run_id": "run-fixture-bad",
+  "batch_id": "20260808-jaeseong-001",
+  "record_id": "KURLY:1000001",
+  "source": "KURLY",
+  "source_record_id": "KURLY:1000001",
+  "content_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "parser_version": "0.2.0",
+  "created_at": "2026-08-08T02:00:00+09:00",
+  "original_product_id": "1000001",
+  "product_url": "https://www.kurly.com/goods/1000001"
+}
