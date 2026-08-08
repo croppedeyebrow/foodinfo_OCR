@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260808-woohee-003",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "버섯",
+  "requested_url": "https://www.kurly.com/search?sword=%EB%B2%84%EC%84%AF",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-08T15:49:46.742572+09:00",
+  "finished_at": "2026-08-08T15:49:50.063241+09:00",
+  "status": "COMPLETED"
+}

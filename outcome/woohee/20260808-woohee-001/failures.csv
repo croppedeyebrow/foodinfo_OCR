@@ -1,0 +1,4 @@
+﻿batch_id,source_site,original_product_id,product_name,product_url,image_path,error_code,error_message,failed_at
+20260808-woohee-001,KURLY,5027767,풋고추 100g,https://www.kurly.com/goods/5027767,detail_images/5027767_01_1ed611a92f9e.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T15:18:41.755094+09:00
+20260808-woohee-001,KURLY,5027768,[KF365] 홍고추 80g,https://www.kurly.com/goods/5027768,detail_images/5027768_01_acbb01b0cf88.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T15:21:44.835749+09:00
+20260808-woohee-001,KURLY,5061352,[KF365] 청양고추 200g,https://www.kurly.com/goods/5061352,detail_images/5061352_01_acc4c4834873.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T15:22:50.293093+09:00
