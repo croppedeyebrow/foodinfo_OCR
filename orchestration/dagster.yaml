@@ -1,0 +1,8 @@
+telemetry:
+  enabled: false
+
+retention:
+  schedule:
+    purge_after_days: 30
+  sensor:
+    purge_after_days: 30

@@ -21,8 +21,8 @@ AI는 한 번에 하나의 `READY` 또는 `IN_PROGRESS` 단계만 수행한다. 
 | 1 | `data_platform/01_repository_baseline.md` | DONE | 현재 기능과 테스트 기준선 (`current_baseline.md`) |
 | 2 | `data_platform/02_contracts_and_storage.md` | DONE | 계약·Manifest·저장 계층 |
 | 3 | `data_platform/03_console_submission.md` | DONE | 팀원 UI 배치 검증·원자적 제출 |
-| 4 | `data_platform/04_pipeline_metadata.md` | BLOCKED | 실행 이력과 lineage |
-| 5 | `data_platform/05_dagster_orchestration.md` | BLOCKED | Dagster asset 그래프 |
+| 4 | `data_platform/04_pipeline_metadata.md` | DONE | 실행 이력·artifact·lineage metadata |
+| 5 | `data_platform/05_dagster_orchestration.md` | DONE | Dagster asset 그래프 |
 | 6 | `data_platform/06_polars_transformation.md` | BLOCKED | Silver 표준화 |
 | 7 | `data_platform/07_mfds_reconciliation.md` | BLOCKED | 식약처 결합·교차 보정 |
 | 8 | `data_platform/08_quality_review.md` | BLOCKED | 품질 게이트·검토 |

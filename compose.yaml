@@ -83,6 +83,34 @@ services:
         condition: service_healthy
     command: ["python", "-m", "src.cli", "health"]
 
+  dagster:
+    profiles: ["platform"]
+    build:
+      context: .
+      dockerfile: docker/orchestration.Dockerfile
+    env_file:
+      - .env
+    environment:
+      DAGSTER_HOME: /opt/dagster/dagster_home
+      DATA_ROOT: /data
+      CONTRACTS_DIR: /app/contracts
+      DUCKDB_PATH: /data/warehouse/pipeline.duckdb
+      PIPELINE_CODE_VERSION: ${PIPELINE_CODE_VERSION:-dev}
+    ports:
+      - "127.0.0.1:${DAGSTER_PORT:-3000}:3000"
+    volumes:
+      - ./apps/normalizer/src:/app/src:ro
+      - ./orchestration:/app/orchestration:ro
+      - ./contracts:/app/contracts:ro
+      - ./datasets:/data
+      - ./outcome:/outcome
+      - ./tests:/app/tests:ro
+      - dagster-home:/opt/dagster/dagster_home
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: "${DAGSTER_MEMORY_LIMIT:-1g}"
+
   postgres:
     image: postgres:17
     environment:
@@ -103,3 +131,4 @@ services:
 
 volumes:
   postgres-data:
+  dagster-home:

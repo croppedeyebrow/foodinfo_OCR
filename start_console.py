@@ -2,6 +2,7 @@
 
 Default: run via Docker Compose (recommended).
 Fallback: local uvicorn with --local.
+Optional: start the administrator Dagster UI with --platform.
 
 If Docker Desktop is not running, prompts to start it and waits until ready
 (Windows / macOS).
@@ -10,6 +11,8 @@ If Docker Desktop is not running, prompts to start it and waits until ready
 from __future__ import annotations
 
 import argparse
+import html
+import json
 import os
 import platform
 import subprocess
@@ -17,13 +20,18 @@ import sys
 import threading
 import time
 import webbrowser
+from dataclasses import dataclass
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlencode, urlparse
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_PORT = 8787
+DEFAULT_DAGSTER_PORT = 3000
 DEFAULT_HOST = "127.0.0.1"
 DOCKER_WAIT_SECONDS = 120
 DOCKER_POLL_INTERVAL = 3
+TRUE_VALUES = {"1", "true", "yes", "on"}
 
 
 def _open_browser(url: str, delay_seconds: float = 2.0) -> None:
@@ -35,6 +43,161 @@ def _open_browser(url: str, delay_seconds: float = 2.0) -> None:
             print(f"[console] Could not open browser: {error}")
 
     threading.Thread(target=_open, daemon=True).start()
+
+
+@dataclass(frozen=True)
+class _ServiceEndpoint:
+    key: str
+    label: str
+    target_url: str
+    probe_url: str
+
+
+def _connecting_html(endpoint: _ServiceEndpoint) -> str:
+    label = html.escape(endpoint.label)
+    target_json = json.dumps(endpoint.target_url)
+    probe_json = json.dumps(endpoint.probe_url)
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{label} 연결 중</title>
+  <style>
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      color: #e5eef8; background:
+        radial-gradient(circle at top, #17375e 0, #08111f 48%, #050a12 100%);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }}
+    main {{
+      width: min(440px, calc(100% - 32px)); padding: 40px 32px;
+      text-align: center; border: 1px solid #294564; border-radius: 20px;
+      background: rgba(8, 20, 35, .88); box-shadow: 0 24px 70px #0008;
+    }}
+    .spinner {{
+      width: 52px; height: 52px; margin: 0 auto 24px;
+      border: 5px solid #24415e; border-top-color: #60a5fa;
+      border-radius: 50%; animation: spin .85s linear infinite;
+    }}
+    h1 {{ margin: 0 0 12px; font-size: 25px; }}
+    p {{ margin: 0; color: #9fb3c8; line-height: 1.6; }}
+    #elapsed {{ margin-top: 18px; color: #6f8ca8; font-size: 13px; }}
+    @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="spinner" aria-hidden="true"></div>
+    <h1>{label} 연결 중</h1>
+    <p>서비스를 준비하고 있습니다.<br>연결되면 자동으로 이동합니다.</p>
+    <div id="elapsed">시작하는 중...</div>
+  </main>
+  <script>
+    const targetUrl = {target_json};
+    const probeUrl = {probe_json};
+    const startedAt = Date.now();
+    async function checkReady() {{
+      try {{
+        await fetch(probeUrl, {{mode: "no-cors", cache: "no-store"}});
+        location.replace(targetUrl);
+      }} catch (_error) {{
+        const seconds = Math.floor((Date.now() - startedAt) / 1000);
+        document.getElementById("elapsed").textContent =
+          `${{seconds}}초째 기다리는 중...`;
+        setTimeout(checkReady, 800);
+      }}
+    }}
+    setTimeout(checkReady, 200);
+  </script>
+</body>
+</html>
+"""
+
+
+class _ConnectingPageServer:
+    def __init__(self, endpoints: list[_ServiceEndpoint]) -> None:
+        self._endpoints = {endpoint.key: endpoint for endpoint in endpoints}
+        endpoint_map = self._endpoints
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802
+                query = parse_qs(urlparse(self.path).query)
+                key = query.get("service", [""])[0]
+                endpoint = endpoint_map.get(key)
+                if endpoint is None:
+                    self.send_error(404)
+                    return
+                body = _connecting_html(endpoint).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, _format: str, *_args) -> None:
+                return
+
+        self._server = ThreadingHTTPServer((DEFAULT_HOST, 0), Handler)
+        self._thread = threading.Thread(
+            target=self._server.serve_forever,
+            daemon=True,
+        )
+        self._thread.start()
+
+    def url(self, service_key: str) -> str:
+        port = self._server.server_address[1]
+        return f"http://{DEFAULT_HOST}:{port}/?{urlencode({'service': service_key})}"
+
+    def close(self) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(timeout=2)
+
+
+def _open_connecting_pages(
+    endpoints: list[_ServiceEndpoint],
+) -> _ConnectingPageServer | None:
+    try:
+        server = _ConnectingPageServer(endpoints)
+    except OSError as error:
+        print(f"[console] Could not start connecting page: {error}")
+        for endpoint in endpoints:
+            _open_browser(endpoint.target_url)
+        return None
+    for endpoint in endpoints:
+        _open_browser(server.url(endpoint.key), delay_seconds=0)
+    return server
+
+
+def _dotenv_flag(
+    name: str,
+    *,
+    dotenv_path: Path | None = None,
+) -> bool:
+    environment_value = os.environ.get(name)
+    if environment_value is not None:
+        return environment_value.strip().lower() in TRUE_VALUES
+
+    path = dotenv_path or ROOT / ".env"
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (FileNotFoundError, OSError, UnicodeError):
+        return False
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("export "):
+            stripped = stripped[7:].lstrip()
+        key, separator, value = stripped.partition("=")
+        if separator and key.strip() == name:
+            normalized = value.strip().strip("\"'").lower()
+            return normalized in TRUE_VALUES
+    return False
 
 
 def _docker_cli_exists() -> bool:
@@ -177,7 +340,14 @@ def ensure_docker_ready(*, assume_yes: bool = False) -> bool:
     return False
 
 
-def _run_docker(port: int, *, no_browser: bool, assume_yes: bool) -> int:
+def _run_docker(
+    port: int,
+    *,
+    no_browser: bool,
+    assume_yes: bool,
+    platform_mode: bool = False,
+    dagster_port: int = DEFAULT_DAGSTER_PORT,
+) -> int:
     if not ensure_docker_ready(assume_yes=assume_yes):
         return 1
 
@@ -185,24 +355,61 @@ def _run_docker(port: int, *, no_browser: bool, assume_yes: bool) -> int:
     print()
     print(" Pipeline Console (Docker)")
     print(f" {url}")
+    if platform_mode:
+        print(" Dagster (platform operator)")
+        print(f" http://127.0.0.1:{dagster_port}/")
     print(" Stop: Ctrl+C")
     print()
 
+    connecting_server = None
     if not no_browser:
-        _open_browser(url)
+        endpoints = [
+            _ServiceEndpoint(
+                key="console",
+                label="Pipeline Console",
+                target_url=url,
+                probe_url=f"http://127.0.0.1:{port}/health",
+            )
+        ]
+        if platform_mode:
+            endpoints.append(
+                _ServiceEndpoint(
+                    key="dagster",
+                    label="Dagster",
+                    target_url=f"http://127.0.0.1:{dagster_port}/",
+                    probe_url=f"http://127.0.0.1:{dagster_port}/server_info",
+                )
+            )
+        connecting_server = _open_connecting_pages(endpoints)
 
     env = os.environ.copy()
     env["CONSOLE_PORT"] = str(port)
+    env["DAGSTER_PORT"] = str(dagster_port)
     # Nested compose must resolve ./apps/... against the real host path.
     env["HOST_PROJECT_DIR"] = str(ROOT.resolve()).replace("\\", "/")
-    cmd = [
-        "docker",
-        "compose",
-        "up",
-        "--build",
-        "console",
-    ]
+    platform_started = False
     try:
+        if platform_mode:
+            platform_result = subprocess.run(
+                [
+                    "docker",
+                    "compose",
+                    "--profile",
+                    "platform",
+                    "up",
+                    "-d",
+                    "--build",
+                    "dagster",
+                ],
+                cwd=str(ROOT),
+                env=env,
+                check=False,
+            )
+            if platform_result.returncode != 0:
+                return platform_result.returncode
+            platform_started = True
+
+        cmd = ["docker", "compose", "up", "--build", "console"]
         return subprocess.call(cmd, cwd=str(ROOT), env=env)
     except FileNotFoundError:
         print("[console] docker not found. Install Docker Desktop, or use --local.")
@@ -214,6 +421,14 @@ def _run_docker(port: int, *, no_browser: bool, assume_yes: bool) -> int:
             cwd=str(ROOT),
         )
         return 0
+    finally:
+        if platform_started:
+            subprocess.call(
+                ["docker", "compose", "--profile", "platform", "stop", "dagster"],
+                cwd=str(ROOT),
+            )
+        if connecting_server is not None:
+            connecting_server.close()
 
 
 def _run_local(port: int, host: str, *, no_browser: bool, no_reload: bool) -> int:
@@ -239,8 +454,18 @@ def _run_local(port: int, host: str, *, no_browser: bool, no_reload: bool) -> in
     print(" Stop: Ctrl+C")
     print()
 
+    connecting_server = None
     if not no_browser:
-        _open_browser(url, delay_seconds=1.5)
+        connecting_server = _open_connecting_pages(
+            [
+                _ServiceEndpoint(
+                    key="console",
+                    label="Pipeline Console",
+                    target_url=url,
+                    probe_url=f"http://{host}:{port}/health",
+                )
+            ]
+        )
 
     cmd = [
         sys.executable,
@@ -262,6 +487,9 @@ def _run_local(port: int, host: str, *, no_browser: bool, no_reload: bool) -> in
     except KeyboardInterrupt:
         print("\n[console] Stopped.")
         return 0
+    finally:
+        if connecting_server is not None:
+            connecting_server.close()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -289,6 +517,23 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Disable auto-reload (--local only)",
     )
+    platform_group = parser.add_mutually_exclusive_group()
+    platform_group.add_argument(
+        "--platform",
+        action="store_true",
+        help="Start Dagster with Console, overriding local .env",
+    )
+    platform_group.add_argument(
+        "--console-only",
+        action="store_true",
+        help="Do not start Dagster, overriding local .env",
+    )
+    parser.add_argument(
+        "--dagster-port",
+        type=int,
+        default=DEFAULT_DAGSTER_PORT,
+        help=f"Dagster UI port with --platform (default: {DEFAULT_DAGSTER_PORT})",
+    )
     parser.add_argument(
         "-y",
         "--yes",
@@ -297,8 +542,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     os.chdir(ROOT)
+    platform_mode = args.platform or (
+        not args.console_only and _dotenv_flag("CONSOLE_PLATFORM_MODE")
+    )
 
     if args.local:
+        if platform_mode:
+            parser.error("--platform is available in Docker mode only")
         return _run_local(
             args.port,
             args.host,
@@ -309,6 +559,8 @@ def main(argv: list[str] | None = None) -> int:
         args.port,
         no_browser=args.no_browser,
         assume_yes=args.yes,
+        platform_mode=platform_mode,
+        dagster_port=args.dagster_port,
     )
 
 

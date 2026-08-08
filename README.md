@@ -7,9 +7,10 @@
 - `crawler`: Playwright 기반 상품 발견 및 상세페이지 수집
 - `ocr-parser`: PaddleOCR 기반 OCR, DOM·OCR 병합, 최종 CSV
 - `console`: FastAPI 단계별 실행 UI (`docker compose` CLI 호출)
-- `normalizer`: 계약 검증·products.csv adapter·(추후) Silver 정제 / PostgreSQL
+- `normalizer`: 계약 검증·products.csv adapter·pipeline metadata / (추후) Silver 정제
+- `orchestration`: 관리자용 Dagster asset graph·batch partition·실행 job
 - `contracts/`: versioned JSON Schema (`collection_submission`, Kurly/MFDS raw, Silver/Gold 등)
-- `postgres`: (추후) 정제 데이터 적재
+- `postgres`: 전용 schema의 pipeline metadata 저장
 
 원본 이미지·크롤/OCR 원문 JSON은 `datasets`에 저장되며 Git에서 제외됩니다.  
 발견 목록(`datasets/discovery/{배치ID}/`)과 최종 CSV(`outcome/{팀원}/{배치ID}/`)는 팀 공유용으로 남길 수 있습니다.
@@ -102,6 +103,26 @@ python3 start_console.py
 # Windows
 python start_console.py
 ```
+
+플랫폼 관리자는 Git에서 제외되는 개인 `.env`에 다음 값을 설정합니다.
+
+```dotenv
+CONSOLE_PLATFORM_MODE=true
+```
+
+이후 평소처럼 실행해도 Console과 Dagster가 함께 시작됩니다.
+
+```powershell
+python start_console.py
+```
+
+이 모드는 Console(`8787`)과 Dagster(`3000`)를 함께 열고, `Ctrl+C`로
+Console과 Dagster를 함께 정지합니다. PostgreSQL volume은 삭제하지 않습니다.
+팀원 기본 실행에는 Dagster가 포함되지 않습니다. Dagster 포트는
+`--dagster-port 3100`처럼 변경할 수 있습니다. 브라우저에는 서비스가 준비될
+때까지 임시 연결 화면이 표시되고, health 응답을 받으면 자동 이동합니다.
+일회성 강제 실행은 `--platform`, 개인 설정을 무시하고 Console만 실행하려면
+`--console-only`를 사용합니다.
 
 포트 변경: `bash start-console.sh 8790` / `start-console.cmd 8790`  
 브라우저: [http://127.0.0.1:8787](http://127.0.0.1:8787)
@@ -266,6 +287,36 @@ datasets/inbox/accepted/{배치ID}/manifest.json
 datasets/inbox/accepted/{배치ID}/discovery/
 datasets/inbox/accepted/{배치ID}/outcome/
 ```
+
+### Pipeline metadata 등록 (플랫폼 관리자)
+
+팀원 Console에는 DB 기능을 노출하지 않습니다. 관리자는 accepted batch를
+PostgreSQL의 전용 `pipeline_metadata` schema에 등록하고 조회할 수 있습니다.
+
+```cmd
+docker compose up -d postgres
+docker compose run --rm normalizer python -m src.cli metadata-migrate
+docker compose run --rm normalizer python -m src.cli metadata-register-submission --batch-id 20260724-jaeseong-001 --member jaeseong --code-version <git-sha>
+docker compose run --rm normalizer python -m src.cli metadata-list-runs --batch-id 20260724-jaeseong-001
+```
+
+DB에는 파일 본문을 넣지 않고 경로, checksum, row count, byte size, version과
+lineage만 저장합니다.
+
+### Dagster 오케스트레이션 (플랫폼 관리자)
+
+Dagster는 accepted batch와 애플리케이션 entrypoint를 연결하는 관리자용
+오케스트레이션 계층입니다. 팀원 Console 흐름은 그대로 유지됩니다.
+
+```cmd
+docker compose --profile platform up -d dagster
+```
+
+관리자 UI는 기본값으로 [http://127.0.0.1:3000](http://127.0.0.1:3000)에서
+열립니다. `accepted_collection_sensor`를 켜면 새 accepted batch를
+`collection_batches` dynamic partition으로 등록하고 `process_collection_batch`
+job을 실행합니다. 아직 구현 전인 Silver·MFDS·Reconciliation·Gold asset은
+그래프 계약으로만 표시되며 materialize할 수 없습니다.
 
 ## 한 번에 보기 (예시)
 

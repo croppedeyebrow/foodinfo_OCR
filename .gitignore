@@ -20,6 +20,7 @@ datasets/inbox/accepted/*
 datasets/silver/*
 datasets/gold/*
 datasets/quarantine/*
+datasets/warehouse/*
 datasets/input/crawled_products.csv
 
 !datasets/images/.gitkeep
@@ -32,3 +33,4 @@ datasets/input/crawled_products.csv
 !datasets/silver/.gitkeep
 !datasets/gold/.gitkeep
 !datasets/quarantine/.gitkeep
+!datasets/warehouse/.gitkeep

@@ -22,6 +22,17 @@ from .submission import (
 app = typer.Typer(no_args_is_help=True)
 
 
+def _database_url() -> str:
+    value = os.getenv("DATABASE_URL", "").strip()
+    if not value:
+        raise typer.BadParameter("DATABASE_URL 환경변수가 필요합니다.")
+    return value
+
+
+def _echo_json(payload: object) -> None:
+    typer.echo(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+
+
 @app.command()
 def health() -> None:
     """PostgreSQL 연결을 확인한다."""
@@ -213,6 +224,82 @@ def seal_json_cmd(
     )
     typer.echo(f"Wrote: {target}")
     typer.echo(f"content_hash={sealed['content_hash']}")
+
+
+@app.command("metadata-migrate")
+def metadata_migrate() -> None:
+    """pipeline_metadata schema의 미적용 migration을 실행한다."""
+    from .metadata.migrations import apply_migrations
+
+    applied = apply_migrations(_database_url())
+    typer.echo(
+        f"Metadata migrations applied: {', '.join(applied) if applied else 'none'}"
+    )
+
+
+@app.command("metadata-register-submission")
+def metadata_register_submission(
+    batch_id: str = typer.Option(..., "--batch-id"),
+    member: str = typer.Option(..., "--member"),
+    code_version: str = typer.Option(..., "--code-version"),
+    data_root: Path = typer.Option(Path("/data"), "--data-root"),
+    contracts_dir: Path | None = typer.Option(None, "--contracts-dir"),
+) -> None:
+    """accepted collection bundle을 metadata DB에 idempotent하게 등록한다."""
+    from .metadata.migrations import apply_migrations
+    from .metadata.repository import MetadataRepository
+    from .metadata.submission_adapter import register_accepted_submission
+
+    database_url = _database_url()
+    apply_migrations(database_url)
+    snapshot = register_accepted_submission(
+        MetadataRepository(database_url),
+        data_root=data_root,
+        batch_id=batch_id,
+        member=member,
+        code_version=code_version,
+        contracts_dir=contracts_dir,
+    )
+    _echo_json(snapshot)
+
+
+@app.command("metadata-show-run")
+def metadata_show_run(
+    run_id: str = typer.Option(..., "--run-id"),
+) -> None:
+    """run과 step/artifact/quality metadata를 조회한다."""
+    from .metadata.repository import MetadataRepository
+
+    snapshot = MetadataRepository(_database_url()).get_run(run_id)
+    if snapshot is None:
+        typer.echo(f"RUN_NOT_FOUND: {run_id}", err=True)
+        raise typer.Exit(code=1)
+    _echo_json(snapshot)
+
+
+@app.command("metadata-list-runs")
+def metadata_list_runs(
+    batch_id: str | None = typer.Option(None, "--batch-id"),
+    limit: int = typer.Option(50, "--limit", min=1, max=1000),
+) -> None:
+    """최근 pipeline run을 조회한다."""
+    from .metadata.repository import MetadataRepository
+
+    rows = MetadataRepository(_database_url()).list_runs(
+        batch_id=batch_id, limit=limit
+    )
+    _echo_json(rows)
+
+
+@app.command("metadata-lineage")
+def metadata_lineage(
+    artifact_id: str = typer.Option(..., "--artifact-id"),
+) -> None:
+    """artifact의 상위 lineage를 조회한다."""
+    from .metadata.repository import MetadataRepository
+
+    rows = MetadataRepository(_database_url()).trace_ancestors(artifact_id)
+    _echo_json(rows)
 
 
 if __name__ == "__main__":
