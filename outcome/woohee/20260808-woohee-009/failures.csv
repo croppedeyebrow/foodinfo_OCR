@@ -1,0 +1,5 @@
+﻿batch_id,source_site,original_product_id,product_name,product_url,image_path,error_code,error_message,failed_at
+20260808-woohee-009,KURLY,5027319,알배기 배추 1봉,https://www.kurly.com/goods/5027319,detail_images/5027319_01_768ad1773c42.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T18:47:41.588805+09:00
+20260808-woohee-009,KURLY,5060212,손질 쌈배추 200g,https://www.kurly.com/goods/5060212,detail_images/5060212_01_772277c818d6.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T18:49:01.943800+09:00
+20260808-woohee-009,KURLY,1000540435,친환경 손질 쌈배추 250G,https://www.kurly.com/goods/1000540435,detail_images/1000540435_01_34796a2f8978.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T18:51:33.063894+09:00
+20260808-woohee-009,KURLY,5001366,친환경 쌈배추 1/2통,https://www.kurly.com/goods/5001366,detail_images/5001366_01_ce91f0b256dd.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T18:57:44.664495+09:00

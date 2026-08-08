@@ -1,0 +1,5 @@
+﻿batch_id,source_site,original_product_id,product_name,product_url,image_path,error_code,error_message,failed_at
+20260808-woohee-006,KURLY,5156425,[조선호텔김치] 프리미엄 배추김치 1kg,https://www.kurly.com/goods/5156425,detail_images/5156425_01_3d5d32e49676.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T17:56:40.266268+09:00
+20260808-woohee-006,KURLY,1002387037,[왕애밥상] 매운실비김치 500g,https://www.kurly.com/goods/1002387037,detail_images/1002387037_02_2a29105d4aee.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T18:00:14.033184+09:00
+20260808-woohee-006,KURLY,5156432,[조선호텔김치] 프리미엄 겉절이 500g,https://www.kurly.com/goods/5156432,detail_images/5156432_01_ee40f2c667f3.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T18:01:21.673301+09:00
+20260808-woohee-006,KURLY,5063827,[Kurly's] 시원한 배추김치 1.5kg,https://www.kurly.com/goods/5063827,detail_images/5063827_01_1abe68803f00.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T18:03:11.671120+09:00

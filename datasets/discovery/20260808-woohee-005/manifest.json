@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260808-woohee-005",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "브로콜리",
+  "requested_url": "https://www.kurly.com/search?sword=%EB%B8%8C%EB%A1%9C%EC%BD%9C%EB%A6%AC",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-08T17:35:10.332655+09:00",
+  "finished_at": "2026-08-08T17:35:13.953846+09:00",
+  "status": "COMPLETED"
+}

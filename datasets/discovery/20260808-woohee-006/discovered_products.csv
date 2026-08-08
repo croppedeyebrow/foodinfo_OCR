@@ -1,0 +1,6 @@
+﻿schema_version,batch_id,source_site,source_mode,source_value,original_product_id,product_name_preview,product_url,discovery_order,discovered_at,discovery_status
+1.0,20260808-woohee-006,KURLY,SEARCH,김치,5156441,"담기 샛별배송 [농협풍산김치] 맛김치 800g 먹기 좋게 썬 간편 김치 10,890원 9,999+ Kurly Only",https://www.kurly.com/goods/5156441,1,2026-08-08T17:45:31.232622+09:00,DISCOVERED
+1.0,20260808-woohee-006,KURLY,SEARCH,김치,5156425,"담기 샛별배송 [조선호텔김치] 프리미엄 배추김치 1kg 조선호텔 대표 명품김치 29,500원 15%25,075원 999+",https://www.kurly.com/goods/5156425,2,2026-08-08T17:45:31.235133+09:00,DISCOVERED
+1.0,20260808-woohee-006,KURLY,SEARCH,김치,1002387037,"담기 샛별배송 [왕애밥상] 매운실비김치 500g 입맛 돋우는 화끈한 매운맛 7,900원 7%7,300원 9,999+",https://www.kurly.com/goods/1002387037,3,2026-08-08T17:45:31.235170+09:00,DISCOVERED
+1.0,20260808-woohee-006,KURLY,SEARCH,김치,5156432,"담기 샛별배송 [조선호텔김치] 프리미엄 겉절이 500g 아삭하게 입맛 돋우는 18,000원 10%16,200원 999+",https://www.kurly.com/goods/5156432,4,2026-08-08T17:45:31.235183+09:00,DISCOVERED
+1.0,20260808-woohee-006,KURLY,SEARCH,김치,5063827,"멤버스특가 담기 샛별배송 [Kurly's] 시원한 배추김치 1.5kg 횡성한우 사골육수의 깊은 감칠맛 16,300원 15%13,840원~ 9,999+ Kurly Only",https://www.kurly.com/goods/5063827,5,2026-08-08T17:45:31.235404+09:00,DISCOVERED
