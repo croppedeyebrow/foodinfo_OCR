@@ -21,6 +21,20 @@
 
 `validate-contract`는 schema/pydantic 검사 후, payload에 `content_hash`가 있으면 재계산값과 비교한다. 불일치 시 `CHECKSUM_MISMATCH`.
 
+## Collection batch checksum
+
+제출 멱등성에는 계약 `content_hash`와 별도로 필수 산출물 묶음의 SHA-256을 사용한다.
+
+1. `discovery/discovered_products.csv`
+2. `discovery/crawled_products.csv`
+3. `discovery/image_text_check.csv`
+4. `outcome/products.csv`
+5. `outcome/failures.csv` (있는 경우)
+
+각 파일의 SHA-256을 계산한 후 상대 경로를 사전식 정렬하여
+`상대경로 + NUL + 파일 SHA-256 + LF` 바이트를 연결하고 다시 SHA-256을 계산한다.
+임시 제출 디렉터리에서도 같은 값을 재검증한 뒤 atomic rename한다.
+
 ## 버전
 
 - backward compatible 필드 추가: minor 증가

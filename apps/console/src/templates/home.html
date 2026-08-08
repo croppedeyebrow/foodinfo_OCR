@@ -4,14 +4,15 @@
 <section class="panel">
   <h1>단계별 실행</h1>
   <p class="lead">
-    CMD 대신 화면에서 파라미터를 확인하고 1 → 2 → 2.5 → 3 순서로 실행합니다.
-    실제 작업은 <code>docker compose run</code>으로 crawler / ocr-parser를 호출합니다.
+    CMD 대신 화면에서 파라미터를 확인하고 1 → 2 → 2.5 → 3 → 4 순서로 실행합니다.
+    실제 작업은 허용된 crawler / ocr-parser / normalizer 명령만 호출합니다.
   </p>
   <ol>
     <li><a href="/steps/discover">상품 발견</a> — URL / 검색 / 카테고리</li>
     <li><a href="/steps/collect">상세 수집</a> — discovered → crawled</li>
     <li><a href="/steps/classify">이미지 텍스트 판별</a> — image_text_check.csv</li>
     <li><a href="/steps/ocr">OCR · 최종 CSV</a> — outcome/{{ batch_member }}/</li>
+    <li><a href="/steps/submit">배치 검증 및 제출</a> — accepted inbox</li>
   </ol>
 </section>
 

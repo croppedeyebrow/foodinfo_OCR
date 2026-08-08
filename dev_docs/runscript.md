@@ -194,6 +194,26 @@ outcome\{BATCH_MEMBER}\{배치ID}\failures.csv
 
 ---
 
+## 4단계: 배치 검증 및 제출
+
+Console의 **4. 검증·제출** 화면을 권장합니다. CLI로 실행할 때:
+
+```cmd
+docker compose run --rm --no-deps normalizer python -m src.cli validate-collection --batch-id 20260724-jaeseong-001 --member jaeseong
+
+docker compose run --rm --no-deps normalizer python -m src.cli submit-collection --batch-id 20260724-jaeseong-001 --member jaeseong
+```
+
+필수 파일은 `discovered_products.csv`, `crawled_products.csv`,
+`image_text_check.csv`, `products.csv`입니다. 검증 보고서는
+`outcome\{BATCH_MEMBER}\{배치ID}\validation_report.json`, 접수 결과는
+`datasets\inbox\accepted\{배치ID}\`에 생성됩니다.
+
+같은 필수 산출물 묶음 checksum의 재제출은 멱등 성공하며, 다른 내용으로 이미
+접수된 batch를 덮어쓰지 않습니다.
+
+---
+
 ## 전체 예시 (검색 5건)
 
 ```cmd
@@ -204,4 +224,8 @@ docker compose run --rm crawler python -m src.cli collect-details --manifest /da
 docker compose run --rm ocr-parser python -m src.cli classify-images --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
 
 docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
+
+docker compose run --rm --no-deps normalizer python -m src.cli validate-collection --batch-id 20260724-jaeseong-001 --member jaeseong
+
+docker compose run --rm --no-deps normalizer python -m src.cli submit-collection --batch-id 20260724-jaeseong-001 --member jaeseong
 ```

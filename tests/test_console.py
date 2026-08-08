@@ -15,13 +15,17 @@ cleaned = [
     if "apps/crawler" not in path.replace("\\", "/")
     and "apps/ocr-parser" not in path.replace("\\", "/")
     and "apps/console" not in path.replace("\\", "/")
+    and "apps/normalizer" not in path.replace("\\", "/")
 ]
 sys.path[:] = [str(CONSOLE_ROOT), *cleaned]
 
+from src import runner as runner_module  # noqa: E402
 from src.runner import (  # noqa: E402
     JobRunner,
     JobState,
+    _data_bind_root,
     _docker_bind_path,
+    _looks_like_usable_bind_root,
     build_classify_images_command,
     build_collect_details_command,
     build_compose_command,
@@ -30,18 +34,22 @@ from src.runner import (  # noqa: E402
     build_discover_urls_command,
     build_docker_run_command,
     build_process_batch_command,
+    build_submit_collection_command,
+    build_validate_collection_command,
 )
 from src.summaries import (  # noqa: E402
     count_csv_rows,
     list_discovery_batches,
+    summarize_submission,
     summarize_text_checks,
+    validate_batch_selection,
 )
 
 
 def test_build_compose_command_base(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("HOST_PROJECT_DIR", raising=False)
     monkeypatch.delenv("COMPOSE_FILE_PATH", raising=False)
-    monkeypatch.setattr("src.runner._in_console_container", lambda: False)
+    monkeypatch.setattr(runner_module, "_in_console_container", lambda: False)
     cmd = build_compose_command("crawler", ["health"])
     assert cmd[:2] == ["docker", "compose"]
     assert "run" in cmd and "--rm" in cmd
@@ -63,10 +71,11 @@ def test_build_docker_run_command_in_container(
     monkeypatch.setenv("HOST_PROJECT_DIR", r"C:\Dev\work_python\crowling_ocr_parser")
     monkeypatch.setenv("COMPOSE_PROJECT_NAME", "kurly-freshness-pipeline")
     monkeypatch.setattr(
-        "src.runner._data_bind_root",
+        runner_module,
+        "_data_bind_root",
         lambda: "C:/Dev/work_python/crowling_ocr_parser",
     )
-    monkeypatch.setattr("src.runner._in_console_container", lambda: True)
+    monkeypatch.setattr(runner_module, "_in_console_container", lambda: True)
     cmd = build_compose_command("crawler", ["discover-search", "--keyword", "x"])
     assert cmd[0:3] == ["docker", "run", "--rm"]
     assert "kurly-freshness-pipeline-crawler" in cmd
@@ -77,7 +86,8 @@ def test_build_docker_run_command_in_container(
 
 def test_build_docker_run_mounts_ocr_src(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "src.runner._data_bind_root",
+        runner_module,
+        "_data_bind_root",
         lambda: "C:/Dev/work_python/crowling_ocr_parser",
     )
     cmd = build_docker_run_command("ocr-parser", ["classify-images"])
@@ -87,30 +97,45 @@ def test_build_docker_run_mounts_ocr_src(monkeypatch: pytest.MonkeyPatch) -> Non
     assert "classify-images" in cmd
 
 
+def test_build_docker_run_mounts_normalizer_submission_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runner_module, "_data_bind_root", lambda: "/host/project")
+    cmd = build_docker_run_command("normalizer", ["validate-collection"])
+    assert "/host/project/apps/normalizer/src:/app/src" in cmd
+    assert "/host/project/datasets:/data" in cmd
+    assert "/host/project/outcome:/outcome" in cmd
+    assert "/host/project/contracts:/app/contracts:ro" in cmd
+
+
+def test_build_compose_rejects_non_allowlisted_service() -> None:
+    with pytest.raises(ValueError, match="unsupported service"):
+        build_compose_command("publisher", ["publish"])
+
+
 def test_data_bind_root_prefers_host_project_over_broken_mountinfo(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.runner import _data_bind_root
-
     monkeypatch.delenv("DOCKER_BIND_ROOT", raising=False)
     monkeypatch.setenv("HOST_PROJECT_DIR", r"C:\Dev\work_python\crowling_ocr_parser")
-    monkeypatch.setattr("src.runner._workspace_bind_source_via_inspect", lambda: None)
     monkeypatch.setattr(
-        "src.runner._workspace_mount_source",
+        runner_module, "_workspace_bind_source_via_inspect", lambda: None
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "_workspace_mount_source",
         lambda: "/Dev/work_python/crowling_ocr_parser",
     )
     assert _data_bind_root() == "C:/Dev/work_python/crowling_ocr_parser"
 
 
 def test_looks_like_usable_bind_root() -> None:
-    from src.runner import _looks_like_usable_bind_root
-
     assert _looks_like_usable_bind_root("C:/Dev/work_python/crowling_ocr_parser")
     assert not _looks_like_usable_bind_root("/Dev/work_python/crowling_ocr_parser")
 
 
 def test_build_docker_run_command_direct(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("src.runner._data_bind_root", lambda: "/host/project")
+    monkeypatch.setattr(runner_module, "_data_bind_root", lambda: "/host/project")
     monkeypatch.setenv("OCR_MEMORY_LIMIT", "3g")
     monkeypatch.setenv("OCR_SHM_SIZE", "1g")
     cmd = build_docker_run_command("ocr-parser", ["process-batch"])
@@ -122,7 +147,7 @@ def test_build_docker_run_command_direct(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_build_discover_search_command(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("src.runner._in_console_container", lambda: False)
+    monkeypatch.setattr(runner_module, "_in_console_container", lambda: False)
     cmd = build_discover_search_command("20260726-jaeseong-001", "육류", 5, 3)
     assert "discover-search" in cmd
     assert "--keyword" in cmd and "육류" in cmd
@@ -154,7 +179,7 @@ def test_build_discover_category_requires_code_or_url() -> None:
 
 
 def test_build_collect_and_classify_force(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("src.runner._in_console_container", lambda: False)
+    monkeypatch.setattr(runner_module, "_in_console_container", lambda: False)
     collect = build_collect_details_command("b1", force=True)
     assert "collect-details" in collect
     assert "--force" in collect
@@ -179,6 +204,17 @@ def test_build_process_batch_command_chunk() -> None:
     cmd = build_process_batch_command("b1", offset=10, limit=5)
     assert "--offset" in cmd and "10" in cmd
     assert "--limit" in cmd and "5" in cmd
+
+
+def test_build_submission_commands(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runner_module, "_in_console_container", lambda: False)
+    validate = build_validate_collection_command("b1-jaeseong", "jaeseong")
+    submit = build_submit_collection_command("b1-jaeseong", "jaeseong")
+    assert "normalizer" in validate
+    assert "--no-deps" in validate
+    assert "validate-collection" in validate
+    assert "submit-collection" in submit
+    assert "--member" in submit and "jaeseong" in submit
 
 
 def test_job_runner_rejects_second_job() -> None:
@@ -240,3 +276,45 @@ def test_list_discovery_batches_require_file(tmp_path: Path) -> None:
     assert list_discovery_batches(
         tmp_path, require_file="crawled_products.csv"
     ) == ["20260802-jaeseong-001"]
+
+
+def test_submission_summary_recovers_accepted_state(tmp_path: Path) -> None:
+    batch = "20260808-jaeseong-001"
+    discovery = tmp_path / "datasets" / "discovery" / batch
+    outcome = tmp_path / "outcome" / "jaeseong" / batch
+    accepted = tmp_path / "datasets" / "inbox" / "accepted" / batch
+    discovery.mkdir(parents=True)
+    outcome.mkdir(parents=True)
+    accepted.mkdir(parents=True)
+    for name in (
+        "discovered_products.csv",
+        "crawled_products.csv",
+        "image_text_check.csv",
+    ):
+        (discovery / name).write_text("id\n1\n", encoding="utf-8-sig")
+    (outcome / "products.csv").write_text("id\n1\n", encoding="utf-8-sig")
+    (outcome / "validation_report.json").write_text(
+        '{"status":"READY","schema_versions":["1.0"],'
+        '"parser_versions":["0.2.0"],"checksum_status":"VALID"}',
+        encoding="utf-8",
+    )
+    (accepted / "manifest.json").write_text(
+        '{"status":"ACCEPTED"}', encoding="utf-8"
+    )
+
+    summary = summarize_submission(
+        datasets_root=tmp_path / "datasets",
+        outcome_root=tmp_path / "outcome",
+        batch_id=batch,
+        member="jaeseong",
+    )
+    assert summary["status"] == "ACCEPTED"
+    assert summary["counts"]["products"] == 1
+    assert summary["checksum_status"] == "VALID"
+
+
+def test_validate_batch_selection_rejects_traversal_and_other_member() -> None:
+    with pytest.raises(ValueError):
+        validate_batch_selection("../escape", "jaeseong")
+    with pytest.raises(ValueError):
+        validate_batch_selection("20260808-sunyeong-001", "jaeseong")

@@ -29,5 +29,41 @@
   </p>
   <p><code>{{ summary.products_path }}</code></p>
   <p><code>{{ summary.failures_path }}</code></p>
+  {% elif summary.kind == "submission" %}
+  <p>
+    상태 <span class="status-pill {{ summary.status|lower }}">{{ summary.status }}</span>
+    · batch={{ summary.batch_id }}
+    · member={{ summary.member }}
+  </p>
+  <p>
+    발견 {{ summary.counts.discovered }}
+    · 수집 {{ summary.counts.crawled }}
+    · 판별 {{ summary.counts.image_checks }}
+    · products {{ summary.counts.products }}
+    · failures {{ summary.counts.failures }}
+  </p>
+  <p>
+    schema={{ summary.schema_versions|join(", ") or "미확인" }}
+    · parser={{ summary.parser_versions|join(", ") or "미확인" }}
+    · checksum={{ summary.checksum_status }}
+  </p>
+  {% if summary.batch_sha256 %}
+  <p><code>batch_sha256={{ summary.batch_sha256 }}</code></p>
+  {% elif summary.products_sha256 %}
+  <p><code>products_sha256={{ summary.products_sha256 }}</code></p>
+  {% endif %}
+  <ul>
+    {% for name, exists in summary.required_files.items() %}
+    <li>{{ name }} — {% if exists %}있음{% else %}<strong>없음</strong>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% if summary.errors %}
+  <div class="error">
+    {% for error in summary.errors %}
+    <p>{{ error.error_code }} · {{ error.path }} · {{ error.message }}</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <p><code>{{ summary.accepted_manifest_path }}</code></p>
   {% endif %}
 </div>

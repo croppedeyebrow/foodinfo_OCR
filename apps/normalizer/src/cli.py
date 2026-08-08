@@ -13,6 +13,11 @@ from .contracts import (
     validate_payload,
 )
 from .storage_paths import ensure_storage_dirs
+from .submission import (
+    SubmissionError,
+    submit_collection_batch,
+    validate_and_write_report,
+)
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -126,6 +131,69 @@ def adapt_products_csv_cmd(
 
     typer.echo(f"Wrote: {output}")
     typer.echo(f"row_count={payload['row_count']} content_hash={payload['content_hash']}")
+
+
+@app.command("validate-collection")
+def validate_collection_cmd(
+    batch_id: str = typer.Option(..., "--batch-id"),
+    member: str = typer.Option(..., "--member"),
+    data_root: Path = typer.Option(Path("/data"), "--data-root"),
+    outcome_root: Path = typer.Option(Path("/outcome"), "--outcome-root"),
+    contracts_dir: Path | None = typer.Option(None, "--contracts-dir"),
+) -> None:
+    """Collection 배치를 검증하고 outcome에 validation_report.json을 기록한다."""
+    try:
+        report = validate_and_write_report(
+            data_root=data_root,
+            outcome_root=outcome_root,
+            batch_id=batch_id,
+            member=member,
+            contracts_dir=contracts_dir,
+        )
+    except SubmissionError as error:
+        typer.echo(f"{error.error_code}: {error}", err=True)
+        raise typer.Exit(code=1) from error
+
+    typer.echo(
+        f"VALIDATION_{report.status}: batch_id={batch_id}, "
+        f"products={report.counts['products']}, failures={report.counts['failures']}"
+    )
+    typer.echo(f"checksum={report.batch_sha256 or 'missing'}")
+    if report.errors:
+        for issue in report.errors:
+            typer.echo(
+                f"{issue['error_code']}\t{issue['path']}\t{issue['message']}",
+                err=True,
+            )
+        raise typer.Exit(code=1)
+
+
+@app.command("submit-collection")
+def submit_collection_cmd(
+    batch_id: str = typer.Option(..., "--batch-id"),
+    member: str = typer.Option(..., "--member"),
+    data_root: Path = typer.Option(Path("/data"), "--data-root"),
+    outcome_root: Path = typer.Option(Path("/outcome"), "--outcome-root"),
+    contracts_dir: Path | None = typer.Option(None, "--contracts-dir"),
+) -> None:
+    """검증된 Collection 배치를 accepted inbox로 원자적으로 제출한다."""
+    try:
+        report = submit_collection_batch(
+            data_root=data_root,
+            outcome_root=outcome_root,
+            batch_id=batch_id,
+            member=member,
+            contracts_dir=contracts_dir,
+        )
+    except SubmissionError as error:
+        typer.echo(f"{error.error_code}: {error}", err=True)
+        raise typer.Exit(code=1) from error
+
+    typer.echo(
+        f"SUBMISSION_ACCEPTED: batch_id={batch_id}, "
+        f"duplicate={str(report.duplicate).lower()}, "
+        f"checksum={report.batch_sha256}"
+    )
 
 
 @app.command("seal-json")

@@ -244,6 +244,29 @@ outcome/{BATCH_MEMBER}/{배치ID}/failures.csv
 
 예: `outcome/jaeseong/20260723-jaeseong-test-001/products.csv`
 
+## 4단계: 배치 검증 및 제출
+
+Console의 **4. 검증·제출**에서 배치를 선택한 뒤 먼저 로컬 검증하고
+`accepted inbox 제출`을 실행합니다. 필수 파일, 계약, parser/schema version,
+행 수와 checksum을 확인합니다.
+
+```cmd
+docker compose run --rm --no-deps normalizer python -m src.cli validate-collection --batch-id 20260724-jaeseong-001 --member jaeseong
+
+docker compose run --rm --no-deps normalizer python -m src.cli submit-collection --batch-id 20260724-jaeseong-001 --member jaeseong
+```
+
+제출은 임시 디렉터리에서 검증한 뒤 원자적으로 확정합니다. 동일한 필수
+산출물 묶음 checksum의 재제출은 성공으로 처리하고, 내용이 다른 동일 batch는
+거부합니다. 기존 `datasets/discovery`와 `outcome` 원본은 변경하거나 삭제하지 않습니다.
+
+```text
+outcome/{BATCH_MEMBER}/{배치ID}/validation_report.json
+datasets/inbox/accepted/{배치ID}/manifest.json
+datasets/inbox/accepted/{배치ID}/discovery/
+datasets/inbox/accepted/{배치ID}/outcome/
+```
+
 ## 한 번에 보기 (예시)
 
 ```cmd
@@ -258,6 +281,10 @@ docker compose run --rm ocr-parser python -m src.cli classify-images --manifest 
 
 REM 3) OCR + 최종 CSV
 docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /data/discovery/20260724-jaeseong-001/crawled_products.csv --batch-id 20260724-jaeseong-001
+
+REM 4) 검증 + accepted inbox 제출
+docker compose run --rm --no-deps normalizer python -m src.cli validate-collection --batch-id 20260724-jaeseong-001 --member jaeseong
+docker compose run --rm --no-deps normalizer python -m src.cli submit-collection --batch-id 20260724-jaeseong-001 --member jaeseong
 ```
 
 ## 테스트

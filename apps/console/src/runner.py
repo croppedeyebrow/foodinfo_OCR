@@ -11,6 +11,8 @@ from typing import Sequence
 
 from .progress import count_progress_events, progress_percent
 
+ALLOWED_JOB_SERVICES = frozenset({"crawler", "ocr-parser", "normalizer"})
+
 
 class JobState(str, Enum):
     IDLE = "idle"
@@ -169,7 +171,7 @@ def _data_bind_root() -> str:
 
 
 def build_docker_run_command(service: str, cli_args: Sequence[str]) -> list[str]:
-    """Run crawler/ocr via `docker run` from inside the console container.
+    """Run an allowlisted service via `docker run` inside the console container.
 
     Avoids `docker compose run` service volumes: relative `./apps/...` paths
     resolve to empty host dirs and wipe the image's /app/src.
@@ -226,6 +228,19 @@ def build_docker_run_command(service: str, cli_args: Sequence[str]) -> list[str]
                 f"{bind}/contracts:/app/contracts:ro",
             ]
         )
+    elif service == "normalizer":
+        if mount_live_src:
+            command.extend(["-v", f"{bind}/apps/normalizer/src:/app/src"])
+        command.extend(
+            [
+                "-v",
+                f"{bind}/datasets:/data",
+                "-v",
+                f"{bind}/outcome:/outcome",
+                "-v",
+                f"{bind}/contracts:/app/contracts:ro",
+            ]
+        )
     else:
         raise ValueError(f"unsupported service: {service}")
 
@@ -235,6 +250,8 @@ def build_docker_run_command(service: str, cli_args: Sequence[str]) -> list[str]
 
 def build_compose_command(service: str, cli_args: Sequence[str]) -> list[str]:
     """Assemble job command: docker run (in console) or compose run (on host)."""
+    if service not in ALLOWED_JOB_SERVICES:
+        raise ValueError(f"unsupported service: {service}")
     if _in_console_container():
         return build_docker_run_command(service, cli_args)
 
@@ -245,17 +262,10 @@ def build_compose_command(service: str, cli_args: Sequence[str]) -> list[str]:
     compose_file = _compose_file_for_client()
     if compose_file:
         command.extend(["-f", compose_file])
-    command.extend(
-        [
-            "run",
-            "--rm",
-            service,
-            "python",
-            "-m",
-            "src.cli",
-            *cli_args,
-        ]
-    )
+    command.extend(["run", "--rm"])
+    if service == "normalizer":
+        command.append("--no-deps")
+    command.extend([service, "python", "-m", "src.cli", *cli_args])
     return command
 
 
@@ -362,6 +372,32 @@ def build_process_batch_command(
     if limit is not None:
         args.extend(["--limit", str(limit)])
     return build_compose_command("ocr-parser", args)
+
+
+def build_validate_collection_command(batch_id: str, member: str) -> list[str]:
+    return build_compose_command(
+        "normalizer",
+        [
+            "validate-collection",
+            "--batch-id",
+            batch_id,
+            "--member",
+            member,
+        ],
+    )
+
+
+def build_submit_collection_command(batch_id: str, member: str) -> list[str]:
+    return build_compose_command(
+        "normalizer",
+        [
+            "submit-collection",
+            "--batch-id",
+            batch_id,
+            "--member",
+            member,
+        ],
+    )
 
 
 class JobRunner:

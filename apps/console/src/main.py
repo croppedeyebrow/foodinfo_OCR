@@ -4,8 +4,8 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from .config import get_settings
@@ -17,8 +17,16 @@ from .runner import (
     build_discover_search_command,
     build_discover_urls_command,
     build_process_batch_command,
+    build_submit_collection_command,
+    build_validate_collection_command,
 )
-from .summaries import count_csv_rows, list_discovery_batches, summarize_text_checks
+from .summaries import (
+    count_csv_rows,
+    list_discovery_batches,
+    summarize_submission,
+    summarize_text_checks,
+    validate_batch_selection,
+)
 
 app = FastAPI(title="Kurly Pipeline Console")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -120,6 +128,21 @@ def _ocr_summary(batch_id: str) -> dict | None:
     }
 
 
+def _submission_summary(batch_id: str) -> dict | None:
+    if not batch_id:
+        return None
+    settings = get_settings()
+    try:
+        return summarize_submission(
+            datasets_root=settings.datasets_root,
+            outcome_root=settings.outcome_root,
+            batch_id=batch_id,
+            member=settings.batch_member,
+        )
+    except ValueError:
+        return None
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
@@ -188,6 +211,25 @@ def step_ocr(request: Request, batch_id: str | None = None) -> HTMLResponse:
         }
     )
     return templates.TemplateResponse(request, "step_ocr.html", context)
+
+
+@app.get("/steps/submit", response_class=HTMLResponse)
+def step_submit(request: Request, batch_id: str | None = None) -> HTMLResponse:
+    batches = _batches(require_file="crawled_products.csv")
+    selected = batch_id or (batches[0] if batches else "")
+    context = _base_context("submit")
+    context.update(
+        {
+            "batches": batches,
+            "selected_batch": selected,
+            "summary": _submission_summary(selected),
+            "empty_batches_hint": (
+                "crawled_products.csv가 있는 배치가 없습니다. "
+                "기존 1~3단계를 먼저 완료하세요."
+            ),
+        }
+    )
+    return templates.TemplateResponse(request, "step_submit.html", context)
 
 
 @app.get("/batches")
@@ -365,6 +407,64 @@ def job_ocr(
     elif offset:
         total = max(0, total - offset)
     return _start_or_error(request, "ocr", command, progress_total=total)
+
+
+def _submission_error(request: Request, message: str) -> HTMLResponse:
+    status = runner.status()
+    status.error = message
+    return templates.TemplateResponse(
+        request, "partials/job_status.html", {"status": status}
+    )
+
+
+@app.post("/jobs/validate-submission", response_class=HTMLResponse)
+def job_validate_submission(
+    request: Request,
+    batch_id: str = Form(...),
+) -> HTMLResponse:
+    settings = get_settings()
+    batch_id = batch_id.strip()
+    try:
+        validate_batch_selection(batch_id, settings.batch_member)
+    except ValueError as error:
+        return _submission_error(request, str(error))
+    command = build_validate_collection_command(batch_id, settings.batch_member)
+    return _start_or_error(request, "validate-submission", command)
+
+
+@app.post("/jobs/submit", response_class=HTMLResponse)
+def job_submit(
+    request: Request,
+    batch_id: str = Form(...),
+) -> HTMLResponse:
+    settings = get_settings()
+    batch_id = batch_id.strip()
+    try:
+        validate_batch_selection(batch_id, settings.batch_member)
+    except ValueError as error:
+        return _submission_error(request, str(error))
+    command = build_submit_collection_command(batch_id, settings.batch_member)
+    return _start_or_error(request, "submit", command)
+
+
+@app.get("/submissions/{batch_id}/validation-report")
+def download_validation_report(batch_id: str) -> FileResponse:
+    settings = get_settings()
+    try:
+        validate_batch_selection(batch_id, settings.batch_member)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    path = (
+        settings.outcome_batch_dir(batch_id)
+        / "validation_report.json"
+    )
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="validation report not found")
+    return FileResponse(
+        path,
+        media_type="application/json",
+        filename=f"{batch_id}-validation-report.json",
+    )
 
 
 @app.get("/health")

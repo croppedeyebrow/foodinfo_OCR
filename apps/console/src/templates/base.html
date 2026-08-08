@@ -88,6 +88,7 @@
       border-radius: 8px;
       font: inherit;
       cursor: pointer;
+      text-decoration: none;
     }
     button:disabled { opacity: 0.55; cursor: not-allowed; }
     .hint {
@@ -125,6 +126,9 @@
     .status-pill.running { background: #e0f2fe; border-color: #7dd3fc; }
     .status-pill.succeeded { background: var(--accent-soft); border-color: #86efac; }
     .status-pill.failed { background: #fee2e2; border-color: #fca5a5; color: var(--danger); }
+    .status-pill.ready { background: var(--warn-bg); border-color: #f0d9a0; color: var(--warn); }
+    .status-pill.accepted { background: var(--accent-soft); border-color: #86efac; color: var(--accent); }
+    .status-pill.rejected { background: #fee2e2; border-color: #fca5a5; color: var(--danger); }
     .progress-block { margin: 0.75rem 0 1rem; }
     .progress-meta {
       display: flex;
@@ -181,6 +185,7 @@
       <a href="/steps/collect" class="{% if active_step == 'collect' %}active{% endif %}">2. 상세</a>
       <a href="/steps/classify" class="{% if active_step == 'classify' %}active{% endif %}">2.5 판별</a>
       <a href="/steps/ocr" class="{% if active_step == 'ocr' %}active{% endif %}">3. OCR</a>
+      <a href="/steps/submit" class="{% if active_step == 'submit' %}active{% endif %}">4. 검증·제출</a>
     </nav>
     {% block content %}{% endblock %}
   </main>

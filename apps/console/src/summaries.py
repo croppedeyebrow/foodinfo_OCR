@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import csv
+import json
+import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
+
+BATCH_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
+MEMBER_PATTERN = re.compile(r"^[A-Za-z0-9_]{1,64}$")
 
 
 @dataclass(frozen=True)
@@ -80,3 +85,85 @@ def list_discovery_batches(
             continue
         batches.append(name)
     return batches
+
+
+def validate_batch_selection(batch_id: str, member: str) -> None:
+    if not BATCH_ID_PATTERN.fullmatch(batch_id):
+        raise ValueError("잘못된 batch_id 형식입니다.")
+    if not MEMBER_PATTERN.fullmatch(member):
+        raise ValueError("잘못된 BATCH_MEMBER 형식입니다.")
+    if member not in [part for part in batch_id.split("-") if part]:
+        raise ValueError("선택한 배치는 현재 BATCH_MEMBER 소유가 아닙니다.")
+
+
+def _load_json_object(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def summarize_submission(
+    *,
+    datasets_root: Path,
+    outcome_root: Path,
+    batch_id: str,
+    member: str,
+) -> dict:
+    validate_batch_selection(batch_id, member)
+    discovery_dir = datasets_root / "discovery" / batch_id
+    outcome_dir = outcome_root / member / batch_id
+    accepted_dir = datasets_root / "inbox" / "accepted" / batch_id
+    report_path = outcome_dir / "validation_report.json"
+    report = _load_json_object(report_path)
+    manifest = _load_json_object(accepted_dir / "manifest.json")
+
+    required_files = {
+        "discovered_products.csv": (
+            discovery_dir / "discovered_products.csv"
+        ).is_file(),
+        "crawled_products.csv": (discovery_dir / "crawled_products.csv").is_file(),
+        "image_text_check.csv": (
+            discovery_dir / "image_text_check.csv"
+        ).is_file(),
+        "products.csv": (outcome_dir / "products.csv").is_file(),
+    }
+    if manifest.get("status") == "ACCEPTED":
+        status = "ACCEPTED"
+    elif report.get("status") in {"READY", "REJECTED"}:
+        status = str(report["status"])
+    else:
+        status = "READY" if all(required_files.values()) else "REJECTED"
+
+    products = count_csv_rows(outcome_dir / "products.csv")
+    failures = count_csv_rows(outcome_dir / "failures.csv")
+    discovered = count_csv_rows(discovery_dir / "discovered_products.csv")
+    crawled = count_csv_rows(discovery_dir / "crawled_products.csv")
+    checks = count_csv_rows(discovery_dir / "image_text_check.csv")
+
+    return {
+        "kind": "submission",
+        "batch_id": batch_id,
+        "member": member,
+        "status": status,
+        "counts": {
+            "discovered": discovered.row_count,
+            "crawled": crawled.row_count,
+            "image_checks": checks.row_count,
+            "products": products.row_count,
+            "failures": failures.row_count,
+        },
+        "required_files": required_files,
+        "schema_versions": report.get("schema_versions", []),
+        "parser_versions": report.get("parser_versions", []),
+        "batch_sha256": report.get("batch_sha256"),
+        "products_sha256": report.get("products_sha256"),
+        "checksum_status": report.get("checksum_status", "NOT_VALIDATED"),
+        "errors": report.get("errors", []),
+        "report_exists": report_path.is_file(),
+        "report_path": str(report_path),
+        "accepted_manifest_path": str(accepted_dir / "manifest.json"),
+    }
