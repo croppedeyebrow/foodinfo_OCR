@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260808-woohee-017",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "고구마",
+  "requested_url": "https://www.kurly.com/search?sword=%EA%B3%A0%EA%B5%AC%EB%A7%88",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-08T22:44:18.242071+09:00",
+  "finished_at": "2026-08-08T22:44:23.651852+09:00",
+  "status": "COMPLETED"
+}

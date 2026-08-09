@@ -1,0 +1,4 @@
+﻿batch_id,source_site,original_product_id,product_name,product_url,image_path,error_code,error_message,failed_at
+20260808-woohee-012,KURLY,5053497,조각 양배추 500g,https://www.kurly.com/goods/5053497,detail_images/5053497_01_a0cd0be6e44f.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T21:42:42.266083+09:00
+20260808-woohee-012,KURLY,1002318657,[바름팜] 강원 고랭지 양배추 900g,https://www.kurly.com/goods/1002318657,detail_images/1002318657_01_a54c5eebb84a.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T21:44:06.408701+09:00
+20260808-woohee-012,KURLY,1001584835,유기농 양배추 1통 (800g),https://www.kurly.com/goods/1001584835,detail_images/1001584835_01_bf1f880f6429.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T21:45:01.241869+09:00

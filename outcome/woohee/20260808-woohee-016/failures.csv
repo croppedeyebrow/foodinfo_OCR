@@ -1,0 +1,5 @@
+﻿batch_id,source_site,original_product_id,product_name,product_url,image_path,error_code,error_message,failed_at
+20260808-woohee-016,KURLY,5026448,[KF365] 감자 1kg,https://www.kurly.com/goods/5026448,detail_images/5026448_01_aa54db1301bf.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T22:34:57.678707+09:00
+20260808-woohee-016,KURLY,5049249,[팜송] 한끼 감자 300g,https://www.kurly.com/goods/5049249,detail_images/5049249_01_de5a21ae1161.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T22:36:54.462861+09:00
+20260808-woohee-016,KURLY,5153165,골든킹 감자 900g,https://www.kurly.com/goods/5153165,detail_images/5153165_01_66945273a0cf.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T22:37:53.995652+09:00
+20260808-woohee-016,KURLY,5000069,[바름팜] 친환경 감자 600g,https://www.kurly.com/goods/5000069,detail_images/5000069_04_6c6ddb43d595.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-08T22:41:16.736050+09:00
