@@ -30,6 +30,23 @@ def _load_dotenv(project_root: Path) -> None:
             os.environ[key] = value
 
 
+def _env_flag(name: str, *, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _team_members() -> tuple[str, ...]:
+    raw = os.getenv("TEAM_MEMBERS", "jaeseong,sunyeong,woohee").strip()
+    members = tuple(
+        item.strip()
+        for item in raw.split(",")
+        if item.strip()
+    )
+    return members or ("jaeseong", "sunyeong", "woohee")
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> "Settings":
     project_root = _find_project_root()
@@ -47,6 +64,8 @@ def get_settings() -> "Settings":
         batch_member=os.getenv("BATCH_MEMBER", "unknown"),
         datasets_root=datasets_root,
         outcome_root=outcome_root,
+        platform_mode=_env_flag("CONSOLE_PLATFORM_MODE"),
+        team_members=_team_members(),
     )
 
 
@@ -58,11 +77,15 @@ class Settings:
         batch_member: str,
         datasets_root: Path,
         outcome_root: Path,
+        platform_mode: bool,
+        team_members: tuple[str, ...],
     ) -> None:
         self.project_root = project_root
         self.batch_member = batch_member
         self.datasets_root = datasets_root
         self.outcome_root = outcome_root
+        self.platform_mode = platform_mode
+        self.team_members = team_members
         self.discovery_root = datasets_root / "discovery"
 
     def discovery_batch_dir(self, batch_id: str) -> Path:

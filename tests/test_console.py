@@ -34,13 +34,16 @@ from src.runner import (  # noqa: E402
     build_discover_urls_command,
     build_docker_run_command,
     build_process_batch_command,
+    build_dagster_intake_command,
     build_submit_collection_command,
     build_validate_collection_command,
 )
 from src.summaries import (  # noqa: E402
     count_csv_rows,
+    infer_batch_member,
     list_discovery_batches,
     summarize_submission,
+    summarize_team_batches,
     summarize_text_checks,
     validate_batch_selection,
 )
@@ -217,12 +220,53 @@ def test_build_submission_commands(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "--member" in submit and "jaeseong" in submit
 
 
-def test_job_runner_rejects_second_job() -> None:
-    runner = JobRunner(project_root=".")
-    with runner._lock:
-        runner._status.state = JobState.RUNNING
-    with pytest.raises(RuntimeError, match="already running"):
-        runner.start("ocr", ["echo", "no"])
+def test_job_runner_queue_runs_sequentially(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    runner = JobRunner(project_root=str(tmp_path))
+    calls: list[list[str]] = []
+
+    class FakeProcess:
+        def __init__(self, command: list[str]) -> None:
+            calls.append(command)
+            self.stdout = iter([f"ran {' '.join(command)}\n"])
+
+        def wait(self) -> int:
+            return 0
+
+    monkeypatch.setattr(
+        runner_module.subprocess,
+        "Popen",
+        lambda command, **_kwargs: FakeProcess(command),
+    )
+    status = runner.start_queue(
+        "submit",
+        [["echo", "a"], ["echo", "b"]],
+        labels=["batch-a", "batch-b"],
+        stop_on_error=False,
+    )
+    assert status.state in {JobState.RUNNING, JobState.SUCCEEDED}
+    for _ in range(50):
+        current = runner.status()
+        if current.state != JobState.RUNNING:
+            break
+        import time
+
+        time.sleep(0.02)
+    final = runner.status()
+    assert final.state == JobState.SUCCEEDED
+    assert final.progress_done == 2
+    assert calls == [["echo", "a"], ["echo", "b"]]
+    assert "BATCH_DONE: batch-a OK" in final.log
+    assert "BATCH_DONE: batch-b OK" in final.log
+
+
+def test_parse_batch_ids_helpers() -> None:
+    from src.main import _parse_batch_ids
+
+    assert _parse_batch_ids(["a", "b,a", " c "]) == ["a", "b", "c"]
+    assert _parse_batch_ids([]) == []
 
 
 def test_count_csv_rows(tmp_path: Path) -> None:
@@ -318,3 +362,93 @@ def test_validate_batch_selection_rejects_traversal_and_other_member() -> None:
         validate_batch_selection("../escape", "jaeseong")
     with pytest.raises(ValueError):
         validate_batch_selection("20260808-sunyeong-001", "jaeseong")
+
+
+def test_infer_batch_member() -> None:
+    members = ("jaeseong", "sunyeong", "woohee")
+    assert infer_batch_member("20260811-jaeseong-001", members) == "jaeseong"
+    assert infer_batch_member("20260811-woohee-011", members) == "woohee"
+    assert infer_batch_member("invalid-batch", members) is None
+
+
+def test_summarize_team_batches(tmp_path: Path) -> None:
+    discovery = tmp_path / "datasets" / "discovery"
+    outcome = tmp_path / "outcome"
+    for batch, member, keyword in (
+        ("20260811-jaeseong-001", "jaeseong", "닭가슴살"),
+        ("20260811-woohee-002", "woohee", "고추"),
+    ):
+        batch_dir = discovery / batch
+        batch_dir.mkdir(parents=True)
+        (batch_dir / "crawled_products.csv").write_text("id\n1\n2\n", encoding="utf-8-sig")
+        (batch_dir / "discovered_products.csv").write_text("id\n1\n", encoding="utf-8-sig")
+        (batch_dir / "manifest.json").write_text(
+            '{"source_mode":"SEARCH","source_value":"%s"}' % keyword,
+            encoding="utf-8",
+        )
+        outcome_dir = outcome / member / batch
+        outcome_dir.mkdir(parents=True)
+        (outcome_dir / "products.csv").write_text("id\n1\n", encoding="utf-8-sig")
+
+    rows = summarize_team_batches(
+        datasets_root=tmp_path / "datasets",
+        outcome_root=outcome,
+        team_members=("jaeseong", "sunyeong", "woohee"),
+    )
+    assert len(rows) == 2
+    by_member = {row["member"]: row for row in rows}
+    assert set(by_member) == {"jaeseong", "woohee"}
+    assert by_member["jaeseong"]["pipeline_status"] == "OCR_DONE"
+    assert by_member["jaeseong"]["source_label"] == "검색: 닭가슴살"
+    assert by_member["woohee"]["source_label"] == "검색: 고추"
+
+
+def test_format_discovery_source() -> None:
+    from src.summaries import format_discovery_source
+
+    assert format_discovery_source(
+        {"source_mode": "SEARCH", "source_value": "브로콜리"}
+    )["source_label"] == "검색: 브로콜리"
+    assert format_discovery_source(
+        {"source_mode": "CATEGORY", "source_value": "910"}
+    )["source_label"] == "카테고리: 910"
+    assert format_discovery_source(
+        {"source_mode": "URL_LIST", "source_value": "product_urls.txt"}
+    )["source_label"] == "URL목록: product_urls.txt"
+
+
+def test_build_dagster_intake_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runner_module, "_in_console_container", lambda: True)
+    cmd = build_dagster_intake_command("20260811-jaeseong-001")
+    assert "docker" in cmd and "compose" in cmd
+    assert "--profile" in cmd and "platform" in cmd
+    assert "dagster" in cmd
+    assert "20260811-jaeseong-001" in " ".join(cmd)
+
+
+def test_platform_routes_require_admin_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.config import get_settings
+    from src.main import app
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("CONSOLE_PLATFORM_MODE", "false")
+    assert get_settings().platform_mode is False
+    client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(app)
+    assert client.get("/steps/team").status_code == 200
+    home = client.get("/")
+    assert home.status_code == 200
+    assert "5. 플랫폼" not in home.text
+    assert "플랫폼 · Dagster" not in home.text
+    denied = client.get("/steps/platform", follow_redirects=False)
+    assert denied.status_code == 302
+    assert denied.headers["location"] == "/"
+    assert client.post(
+        "/jobs/submit",
+        data={"batch_id": "20260811-jaeseong-001"},
+    ).status_code == 200
+    assert "관리자 전용" in client.post(
+        "/jobs/submit",
+        data={"batch_id": "20260811-jaeseong-001"},
+    ).text

@@ -265,11 +265,17 @@ outcome/{BATCH_MEMBER}/{배치ID}/failures.csv
 
 예: `outcome/jaeseong/20260723-jaeseong-test-001/products.csv`
 
-## 4단계: 배치 검증 및 제출
+## 4단계: 팀 크롤 결과 (공유)
 
-Console의 **4. 검증·제출**에서 배치를 선택한 뒤 먼저 로컬 검증하고
-`accepted inbox 제출`을 실행합니다. 필수 파일, 계약, parser/schema version,
-행 수와 checksum을 확인합니다.
+Console **4. 팀 결과**에서 `TEAM_MEMBERS`에 등록된 팀원들의 배치 진행
+상태(발견·수집·판별·OCR·accepted 여부)를 한 화면에서 확인합니다.
+읽기 전용이며 제출·Dagster 실행은 포함하지 않습니다.
+
+## 5단계: 검증·제출·Dagster (플랫폼 관리자)
+
+개인 `.env`에 `CONSOLE_PLATFORM_MODE=true`인 관리자만 Console **5. 플랫폼**
+메뉴가 표시됩니다. 팀원 배치를 선택한 뒤 로컬 검증, accepted inbox 제출,
+Dagster intake asset 실행을 순서대로 수행합니다.
 
 ```cmd
 docker compose run --rm --no-deps normalizer python -m src.cli validate-collection --batch-id 20260724-jaeseong-001 --member jaeseong

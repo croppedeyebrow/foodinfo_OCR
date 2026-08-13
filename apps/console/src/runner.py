@@ -400,6 +400,37 @@ def build_submit_collection_command(batch_id: str, member: str) -> list[str]:
     )
 
 
+def build_compose_platform_exec_command(cli_args: Sequence[str]) -> list[str]:
+    command = ["docker", "compose"]
+    if _in_console_container():
+        command.extend(["-f", "/workspace/compose.yaml", "--project-directory", "/workspace"])
+    else:
+        host_dir = os.getenv("HOST_PROJECT_DIR", "").strip()
+        if host_dir:
+            command.extend(["--project-directory", host_dir.replace("\\", "/")])
+        compose_file = _compose_file_for_client()
+        if compose_file:
+            command.extend(["-f", compose_file])
+    command.extend(["--profile", "platform", "exec", "-T", "dagster", *cli_args])
+    return command
+
+
+def build_dagster_intake_command(batch_id: str) -> list[str]:
+    partition_script = (
+        "from dagster import DagsterInstance; "
+        "from orchestration.partitions import collection_batch_partitions; "
+        f"DagsterInstance.get().add_dynamic_partition("
+        f"collection_batch_partitions.name, {batch_id!r})"
+    )
+    shell = (
+        f"python -c {partition_script!r} && "
+        "dagster asset materialize -m orchestration.definitions "
+        "--select kurly_collection_submission,kurly_bronze_validated "
+        f"--partition {batch_id}"
+    )
+    return build_compose_platform_exec_command(["sh", "-c", shell])
+
+
 class JobRunner:
     """Single-job lock with in-memory log buffer."""
 
@@ -432,25 +463,48 @@ class JobRunner:
         *,
         progress_total: int | None = None,
     ) -> JobStatus:
+        return self.start_queue(
+            step,
+            [command],
+            progress_total=progress_total,
+            labels=None,
+        )
+
+    def start_queue(
+        self,
+        step: str,
+        commands: Sequence[list[str]],
+        *,
+        progress_total: int | None = None,
+        labels: Sequence[str] | None = None,
+        stop_on_error: bool = True,
+    ) -> JobStatus:
+        queue = [list(command) for command in commands if command]
+        if not queue:
+            raise ValueError("실행할 명령이 없습니다.")
+        label_list = list(labels) if labels is not None else [""] * len(queue)
+        if len(label_list) != len(queue):
+            raise ValueError("labels length must match commands")
         with self._lock:
             if self._status.state == JobState.RUNNING:
                 raise RuntimeError("A job is already running")
+            total = progress_total if progress_total is not None else len(queue)
             self._status = JobStatus(
                 state=JobState.RUNNING,
                 step=step,
-                command=list(command),
+                command=list(queue[0]),
                 log="",
                 exit_code=None,
                 started_at=time.time(),
                 finished_at=None,
                 error="",
-                progress_total=progress_total,
+                progress_total=total,
                 progress_done=0,
-                progress_percent=progress_percent(0, progress_total),
+                progress_percent=progress_percent(0, total),
             )
         thread = threading.Thread(
-            target=self._run,
-            args=(command,),
+            target=self._run_queue,
+            args=(queue, label_list, stop_on_error),
             daemon=True,
             name=f"console-job-{step}",
         )
@@ -472,38 +526,88 @@ class JobRunner:
             self._status.log += text
             self._refresh_progress_locked()
 
-    def _run(self, command: list[str]) -> None:
+    def _set_current_command(self, command: list[str]) -> None:
+        with self._lock:
+            self._status.command = list(command)
+
+    def _run_one(self, command: list[str]) -> int:
+        process = subprocess.Popen(
+            command,
+            cwd=self._project_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        )
+        self._process = process
+        assert process.stdout is not None
+        for line in process.stdout:
+            self._append_log(line)
+        return process.wait()
+
+    def _run_queue(
+        self,
+        commands: list[list[str]],
+        labels: list[str],
+        stop_on_error: bool,
+    ) -> None:
+        failed = 0
         try:
-            process = subprocess.Popen(
-                command,
-                cwd=self._project_root,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                bufsize=1,
-            )
-            self._process = process
-            assert process.stdout is not None
-            for line in process.stdout:
-                self._append_log(line)
-            exit_code = process.wait()
+            for index, command in enumerate(commands, start=1):
+                label = labels[index - 1] or f"item-{index}"
+                self._set_current_command(command)
+                self._append_log(
+                    f"\n===== [{index}/{len(commands)}] {label} =====\n"
+                )
+                try:
+                    exit_code = self._run_one(command)
+                except Exception as error:  # noqa: BLE001
+                    failed += 1
+                    self._append_log(
+                        f"\n[console] failed to start: {error}\n"
+                        f"BATCH_DONE: {label} FAILED\n"
+                    )
+                    if stop_on_error:
+                        with self._lock:
+                            self._status.exit_code = 1
+                            self._status.finished_at = time.time()
+                            self._status.state = JobState.FAILED
+                            self._status.error = str(error)
+                            self._refresh_progress_locked()
+                        return
+                    continue
+
+                if exit_code == 0:
+                    self._append_log(f"BATCH_DONE: {label} OK\n")
+                else:
+                    failed += 1
+                    self._append_log(
+                        f"BATCH_DONE: {label} FAILED exit_code={exit_code}\n"
+                    )
+                    if stop_on_error:
+                        with self._lock:
+                            self._status.exit_code = exit_code
+                            self._status.finished_at = time.time()
+                            self._status.state = JobState.FAILED
+                            self._status.error = (
+                                f"{label} failed with exit_code={exit_code}"
+                            )
+                            self._refresh_progress_locked()
+                        return
+
             with self._lock:
-                self._status.exit_code = exit_code
+                self._status.exit_code = 0 if failed == 0 else 1
                 self._status.finished_at = time.time()
                 self._status.state = (
-                    JobState.SUCCEEDED if exit_code == 0 else JobState.FAILED
+                    JobState.SUCCEEDED if failed == 0 else JobState.FAILED
                 )
-                if exit_code != 0:
-                    self._status.error = f"exit_code={exit_code}"
-                self._refresh_progress_locked()
-        except Exception as error:  # noqa: BLE001
-            with self._lock:
-                self._status.finished_at = time.time()
-                self._status.state = JobState.FAILED
-                self._status.error = str(error)
-                self._status.log += f"\n[console] failed to start: {error}\n"
+                if failed:
+                    self._status.error = f"{failed}/{len(commands)} batches failed"
                 self._refresh_progress_locked()
         finally:
             self._process = None
+
+    def _run(self, command: list[str]) -> None:
+        self._run_queue([command], [""], stop_on_error=True)

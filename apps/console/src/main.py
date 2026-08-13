@@ -5,7 +5,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .config import get_settings
@@ -13,6 +13,7 @@ from .runner import (
     JobRunner,
     build_classify_images_command,
     build_collect_details_command,
+    build_dagster_intake_command,
     build_discover_category_command,
     build_discover_search_command,
     build_discover_urls_command,
@@ -22,8 +23,10 @@ from .runner import (
 )
 from .summaries import (
     count_csv_rows,
+    infer_batch_member,
     list_discovery_batches,
     summarize_submission,
+    summarize_team_batches,
     summarize_text_checks,
     validate_batch_selection,
 )
@@ -38,9 +41,39 @@ def _base_context(active_step: str) -> dict:
     settings = get_settings()
     return {
         "batch_member": settings.batch_member,
+        "platform_mode": settings.platform_mode,
+        "team_members": settings.team_members,
         "active_step": active_step,
         "status": runner.status(),
     }
+
+
+def _platform_admin_redirect() -> RedirectResponse | None:
+    if not get_settings().platform_mode:
+        return RedirectResponse(url="/", status_code=302)
+    return None
+
+
+def _submission_error(request: Request, message: str) -> HTMLResponse:
+    status = runner.status()
+    status.error = message
+    return templates.TemplateResponse(
+        request, "partials/job_status.html", {"status": status}
+    )
+
+
+def _require_platform_admin_job(request: Request) -> HTMLResponse | None:
+    if get_settings().platform_mode:
+        return None
+    return _submission_error(request, "관리자 전용 기능입니다.")
+
+
+def _batch_owner(batch_id: str) -> str:
+    settings = get_settings()
+    member = infer_batch_member(batch_id, settings.team_members)
+    if member is None:
+        raise ValueError("배치 ID에서 팀원을 식별할 수 없습니다.")
+    return member
 
 
 def _suggested_batch_id() -> str:
@@ -128,19 +161,38 @@ def _ocr_summary(batch_id: str) -> dict | None:
     }
 
 
-def _submission_summary(batch_id: str) -> dict | None:
+def _submission_summary(batch_id: str, *, member: str | None = None) -> dict | None:
     if not batch_id:
         return None
     settings = get_settings()
+    owner = member or _batch_owner(batch_id)
     try:
         return summarize_submission(
             datasets_root=settings.datasets_root,
             outcome_root=settings.outcome_root,
             batch_id=batch_id,
-            member=settings.batch_member,
+            member=owner,
         )
     except ValueError:
         return None
+
+
+def _platform_batches() -> list[str]:
+    settings = get_settings()
+    batches = list_discovery_batches(
+        settings.discovery_root,
+        require_file="crawled_products.csv",
+    )
+    ready: list[str] = []
+    for batch_id in batches:
+        try:
+            owner = _batch_owner(batch_id)
+        except ValueError:
+            continue
+        products = settings.outcome_batch_dir(batch_id, owner) / "products.csv"
+        if products.is_file() and products.stat().st_size > 0:
+            ready.append(batch_id)
+    return ready
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -213,23 +265,53 @@ def step_ocr(request: Request, batch_id: str | None = None) -> HTMLResponse:
     return templates.TemplateResponse(request, "step_ocr.html", context)
 
 
-@app.get("/steps/submit", response_class=HTMLResponse)
-def step_submit(request: Request, batch_id: str | None = None) -> HTMLResponse:
-    batches = _batches(require_file="crawled_products.csv")
-    selected = batch_id or (batches[0] if batches else "")
-    context = _base_context("submit")
+@app.get("/steps/team", response_class=HTMLResponse)
+def step_team(request: Request) -> HTMLResponse:
+    settings = get_settings()
+    rows = summarize_team_batches(
+        datasets_root=settings.datasets_root,
+        outcome_root=settings.outcome_root,
+        team_members=settings.team_members,
+    )
+    context = _base_context("team")
     context.update(
         {
-            "batches": batches,
-            "selected_batch": selected,
-            "summary": _submission_summary(selected),
-            "empty_batches_hint": (
-                "crawled_products.csv가 있는 배치가 없습니다. "
-                "기존 1~3단계를 먼저 완료하세요."
+            "team_rows": rows,
+            "empty_team_hint": (
+                "팀원 크롤 결과가 아직 없습니다. "
+                "각자 1~3단계를 완료하면 여기에 표시됩니다."
             ),
         }
     )
-    return templates.TemplateResponse(request, "step_submit.html", context)
+    return templates.TemplateResponse(request, "step_team.html", context)
+
+
+@app.get("/steps/platform", response_model=None)
+def step_platform(
+    request: Request,
+) -> HTMLResponse | RedirectResponse:
+    redirect = _platform_admin_redirect()
+    if redirect is not None:
+        return redirect
+    rows = _platform_batch_rows()
+    context = _base_context("platform")
+    context.update(
+        {
+            "batch_rows": rows,
+            "empty_batches_hint": (
+                "OCR products.csv가 있는 팀 배치가 없습니다. "
+                "팀원이 3단계 OCR을 먼저 완료해야 합니다."
+            ),
+        }
+    )
+    return templates.TemplateResponse(request, "step_platform.html", context)
+
+
+@app.get("/steps/submit", response_class=RedirectResponse)
+def step_submit_redirect() -> RedirectResponse:
+    if not get_settings().platform_mode:
+        return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/steps/platform", status_code=307)
 
 
 @app.get("/batches")
@@ -263,6 +345,70 @@ def _start_or_error(
         "partials/job_status.html",
         {"status": status},
     )
+
+
+def _start_queue_or_error(
+    request: Request,
+    step: str,
+    commands: list[list[str]],
+    *,
+    labels: list[str],
+    stop_on_error: bool = True,
+) -> HTMLResponse:
+    try:
+        status = runner.start_queue(
+            step,
+            commands,
+            progress_total=len(commands),
+            labels=labels,
+            stop_on_error=stop_on_error,
+        )
+    except (RuntimeError, ValueError) as error:
+        status = runner.status()
+        status.error = str(error)
+    return templates.TemplateResponse(
+        request,
+        "partials/job_status.html",
+        {"status": status},
+    )
+
+
+def _parse_batch_ids(batch_ids: list[str] | None) -> list[str]:
+    if not batch_ids:
+        return []
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for raw in batch_ids:
+        for part in raw.replace(",", " ").split():
+            batch_id = part.strip()
+            if not batch_id or batch_id in seen:
+                continue
+            seen.add(batch_id)
+            ordered.append(batch_id)
+    return ordered
+
+
+def _resolve_batch_owners(batch_ids: list[str]) -> list[tuple[str, str]]:
+    resolved: list[tuple[str, str]] = []
+    for batch_id in batch_ids:
+        member = _batch_owner(batch_id)
+        validate_batch_selection(batch_id, member)
+        resolved.append((batch_id, member))
+    return resolved
+
+
+def _platform_batch_rows() -> list[dict]:
+    settings = get_settings()
+    rows = summarize_team_batches(
+        datasets_root=settings.datasets_root,
+        outcome_root=settings.outcome_root,
+        team_members=settings.team_members,
+    )
+    return [
+        row
+        for row in rows
+        if row["products"] > 0
+    ]
 
 
 @app.post("/jobs/discover", response_class=HTMLResponse)
@@ -409,55 +555,154 @@ def job_ocr(
     return _start_or_error(request, "ocr", command, progress_total=total)
 
 
-def _submission_error(request: Request, message: str) -> HTMLResponse:
-    status = runner.status()
-    status.error = message
-    return templates.TemplateResponse(
-        request, "partials/job_status.html", {"status": status}
-    )
-
-
 @app.post("/jobs/validate-submission", response_class=HTMLResponse)
 def job_validate_submission(
     request: Request,
-    batch_id: str = Form(...),
+    batch_ids: list[str] = Form(default=[]),
+    batch_id: str = Form(""),
 ) -> HTMLResponse:
-    settings = get_settings()
-    batch_id = batch_id.strip()
+    denied = _require_platform_admin_job(request)
+    if denied is not None:
+        return denied
+    selected = _parse_batch_ids([*batch_ids, batch_id] if batch_id else batch_ids)
+    if not selected:
+        return _submission_error(request, "배치를 하나 이상 선택하세요.")
     try:
-        validate_batch_selection(batch_id, settings.batch_member)
+        owners = _resolve_batch_owners(selected)
     except ValueError as error:
         return _submission_error(request, str(error))
-    command = build_validate_collection_command(batch_id, settings.batch_member)
-    return _start_or_error(request, "validate-submission", command)
+    commands = [
+        build_validate_collection_command(batch, member)
+        for batch, member in owners
+    ]
+    labels = [batch for batch, _member in owners]
+    return _start_queue_or_error(
+        request,
+        "validate-submission",
+        commands,
+        labels=labels,
+        stop_on_error=False,
+    )
 
 
 @app.post("/jobs/submit", response_class=HTMLResponse)
 def job_submit(
     request: Request,
-    batch_id: str = Form(...),
+    batch_ids: list[str] = Form(default=[]),
+    batch_id: str = Form(""),
 ) -> HTMLResponse:
-    settings = get_settings()
-    batch_id = batch_id.strip()
+    denied = _require_platform_admin_job(request)
+    if denied is not None:
+        return denied
+    selected = _parse_batch_ids([*batch_ids, batch_id] if batch_id else batch_ids)
+    if not selected:
+        return _submission_error(request, "배치를 하나 이상 선택하세요.")
     try:
-        validate_batch_selection(batch_id, settings.batch_member)
+        owners = _resolve_batch_owners(selected)
     except ValueError as error:
         return _submission_error(request, str(error))
-    command = build_submit_collection_command(batch_id, settings.batch_member)
-    return _start_or_error(request, "submit", command)
+    commands = [
+        build_submit_collection_command(batch, member)
+        for batch, member in owners
+    ]
+    labels = [batch for batch, _member in owners]
+    return _start_queue_or_error(
+        request,
+        "submit",
+        commands,
+        labels=labels,
+        stop_on_error=False,
+    )
 
 
-@app.get("/submissions/{batch_id}/validation-report")
-def download_validation_report(batch_id: str) -> FileResponse:
-    settings = get_settings()
+@app.post("/jobs/dagster-intake", response_class=HTMLResponse)
+def job_dagster_intake(
+    request: Request,
+    batch_ids: list[str] = Form(default=[]),
+    batch_id: str = Form(""),
+) -> HTMLResponse:
+    denied = _require_platform_admin_job(request)
+    if denied is not None:
+        return denied
+    selected = _parse_batch_ids([*batch_ids, batch_id] if batch_id else batch_ids)
+    if not selected:
+        return _submission_error(request, "배치를 하나 이상 선택하세요.")
     try:
-        validate_batch_selection(batch_id, settings.batch_member)
+        owners = _resolve_batch_owners(selected)
+    except ValueError as error:
+        return _submission_error(request, str(error))
+    settings = get_settings()
+    missing = [
+        batch
+        for batch, _member in owners
+        if not (
+            settings.datasets_root
+            / "inbox"
+            / "accepted"
+            / batch
+            / "manifest.json"
+        ).is_file()
+    ]
+    if missing:
+        return _submission_error(
+            request,
+            "accepted manifest가 없는 배치: " + ", ".join(missing),
+        )
+    commands = [build_dagster_intake_command(batch) for batch, _member in owners]
+    labels = [batch for batch, _member in owners]
+    return _start_queue_or_error(
+        request,
+        "dagster-intake",
+        commands,
+        labels=labels,
+        stop_on_error=False,
+    )
+
+
+@app.post("/jobs/platform-pipeline", response_class=HTMLResponse)
+def job_platform_pipeline(
+    request: Request,
+    batch_ids: list[str] = Form(default=[]),
+) -> HTMLResponse:
+    denied = _require_platform_admin_job(request)
+    if denied is not None:
+        return denied
+    selected = _parse_batch_ids(batch_ids)
+    if not selected:
+        return _submission_error(request, "배치를 하나 이상 선택하세요.")
+    try:
+        owners = _resolve_batch_owners(selected)
+    except ValueError as error:
+        return _submission_error(request, str(error))
+    commands: list[list[str]] = []
+    labels: list[str] = []
+    for batch, member in owners:
+        commands.append(build_validate_collection_command(batch, member))
+        labels.append(f"{batch}/validate")
+        commands.append(build_submit_collection_command(batch, member))
+        labels.append(f"{batch}/submit")
+        commands.append(build_dagster_intake_command(batch))
+        labels.append(f"{batch}/dagster")
+    return _start_queue_or_error(
+        request,
+        "platform-pipeline",
+        commands,
+        labels=labels,
+        stop_on_error=True,
+    )
+
+
+@app.get("/submissions/{batch_id}/validation-report", response_model=None)
+def download_validation_report(batch_id: str) -> FileResponse | RedirectResponse:
+    redirect = _platform_admin_redirect()
+    if redirect is not None:
+        return redirect
+    try:
+        member = _batch_owner(batch_id)
+        validate_batch_selection(batch_id, member)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    path = (
-        settings.outcome_batch_dir(batch_id)
-        / "validation_report.json"
-    )
+    path = get_settings().outcome_batch_dir(batch_id, member) / "validation_report.json"
     if not path.is_file():
         raise HTTPException(status_code=404, detail="validation report not found")
     return FileResponse(

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}4. 팀 크롤 결과 · Pipeline Console{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>4단계 · 팀 크롤 결과</h1>
+  <p class="lead">
+    {{ team_members|join(", ") }} 팀원이 1~3단계까지 완료한 배치를 한곳에서 확인합니다.
+    이 화면은 읽기 전용입니다.
+  </p>
+
+  {% if not team_rows %}
+  <p class="hint">{{ empty_team_hint }}</p>
+  {% else %}
+  <table style="width:100%; border-collapse:collapse; font-size:0.92rem;">
+    <thead>
+      <tr style="text-align:left; border-bottom:1px solid var(--line);">
+        <th style="padding:0.5rem 0.35rem;">팀원</th>
+        <th style="padding:0.5rem 0.35rem;">검색어/출처</th>
+        <th style="padding:0.5rem 0.35rem;">배치 ID</th>
+        <th style="padding:0.5rem 0.35rem;">발견</th>
+        <th style="padding:0.5rem 0.35rem;">수집</th>
+        <th style="padding:0.5rem 0.35rem;">판별</th>
+        <th style="padding:0.5rem 0.35rem;">OCR</th>
+        <th style="padding:0.5rem 0.35rem;">상태</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in team_rows %}
+      <tr style="border-bottom:1px solid var(--line);">
+        <td style="padding:0.55rem 0.35rem;">{{ row.member }}</td>
+        <td style="padding:0.55rem 0.35rem;">{{ row.source_label }}</td>
+        <td style="padding:0.55rem 0.35rem;"><code>{{ row.batch_id }}</code></td>
+        <td style="padding:0.55rem 0.35rem;">{{ row.discovered }}</td>
+        <td style="padding:0.55rem 0.35rem;">{{ row.crawled }}</td>
+        <td style="padding:0.55rem 0.35rem;">{{ row.image_checks }}</td>
+        <td style="padding:0.55rem 0.35rem;">{{ row.products }}</td>
+        <td style="padding:0.55rem 0.35rem;">
+          <span class="status-pill {% if row.pipeline_status == 'ACCEPTED' %}accepted{% elif row.pipeline_status == 'OCR_DONE' %}succeeded{% elif row.pipeline_status == 'CRAWLED' %}ready{% else %}running{% endif %}">
+            {{ row.pipeline_status }}
+          </span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

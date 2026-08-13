@@ -4,6 +4,7 @@ import csv
 import json
 import re
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -85,6 +86,84 @@ def list_discovery_batches(
             continue
         batches.append(name)
     return batches
+
+
+def infer_batch_member(batch_id: str, team_members: Sequence[str]) -> str | None:
+    parts = [part for part in batch_id.split("-") if part]
+    for member in team_members:
+        if member in parts:
+            return member
+    return None
+
+
+def format_discovery_source(manifest: dict) -> dict[str, str]:
+    mode = str(manifest.get("source_mode") or "").strip().upper()
+    value = str(manifest.get("source_value") or "").strip()
+    labels = {
+        "SEARCH": "검색",
+        "CATEGORY": "카테고리",
+        "URL_LIST": "URL목록",
+    }
+    mode_label = labels.get(mode, mode or "미확인")
+    if value:
+        display = f"{mode_label}: {value}"
+    else:
+        display = mode_label
+    return {
+        "source_mode": mode or "UNKNOWN",
+        "source_value": value,
+        "source_label": display,
+    }
+
+
+def summarize_team_batches(
+    *,
+    datasets_root: Path,
+    outcome_root: Path,
+    team_members: Sequence[str],
+) -> list[dict]:
+    discovery_root = datasets_root / "discovery"
+    accepted_root = datasets_root / "inbox" / "accepted"
+    rows: list[dict] = []
+    for batch_id in list_discovery_batches(
+        discovery_root,
+        require_file="crawled_products.csv",
+    ):
+        member = infer_batch_member(batch_id, team_members)
+        if member is None:
+            continue
+        discovery_dir = discovery_root / batch_id
+        outcome_dir = outcome_root / member / batch_id
+        discovered = count_csv_rows(discovery_dir / "discovered_products.csv")
+        crawled = count_csv_rows(discovery_dir / "crawled_products.csv")
+        checks = count_csv_rows(discovery_dir / "image_text_check.csv")
+        products = count_csv_rows(outcome_dir / "products.csv")
+        accepted = (accepted_root / batch_id / "manifest.json").is_file()
+        source = format_discovery_source(
+            _load_json_object(discovery_dir / "manifest.json")
+        )
+        if accepted:
+            pipeline_status = "ACCEPTED"
+        elif products.exists and products.row_count > 0:
+            pipeline_status = "OCR_DONE"
+        elif crawled.exists and crawled.row_count > 0:
+            pipeline_status = "CRAWLED"
+        else:
+            pipeline_status = "IN_PROGRESS"
+        rows.append(
+            {
+                "batch_id": batch_id,
+                "member": member,
+                "discovered": discovered.row_count,
+                "crawled": crawled.row_count,
+                "image_checks": checks.row_count,
+                "products": products.row_count,
+                "pipeline_status": pipeline_status,
+                "accepted": accepted,
+                **source,
+            }
+        )
+    return rows
 
 
 def validate_batch_selection(batch_id: str, member: str) -> None:

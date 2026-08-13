@@ -10,6 +10,7 @@ services:
     environment:
       CONSOLE_PROJECT_ROOT: /workspace
       COMPOSE_PROJECT_NAME: kurly-freshness-pipeline
+      CONSOLE_PLATFORM_MODE: ${CONSOLE_PLATFORM_MODE:-false}
       # Host path for nested `docker compose run` volume resolution (set by start_console.py)
       HOST_PROJECT_DIR: ${HOST_PROJECT_DIR:-}
       COMPOSE_FILE_PATH: /workspace/compose.yaml
