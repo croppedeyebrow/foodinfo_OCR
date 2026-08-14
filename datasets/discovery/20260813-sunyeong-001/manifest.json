@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260813-sunyeong-001",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "고추장",
+  "requested_url": "https://www.kurly.com/search?sword=%EA%B3%A0%EC%B6%94%EC%9E%A5",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-13T16:38:00.528018+09:00",
+  "finished_at": "2026-08-13T16:38:03.759807+09:00",
+  "status": "COMPLETED"
+}

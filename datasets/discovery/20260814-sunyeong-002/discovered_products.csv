@@ -1,0 +1,6 @@
+﻿schema_version,batch_id,source_site,source_mode,source_value,original_product_id,product_name_preview,product_url,discovery_order,discovered_at,discovery_status
+1.0,20260814-sunyeong-002,KURLY,SEARCH,용가리,5069882,"담기 샛별배송 [하림] 용가리 치킨 850g 다섯 가지 공룡 모양 너겟 13,800원 10%12,420원 999+",https://www.kurly.com/goods/5069882,1,2026-08-14T20:20:55.439001+09:00,DISCOVERED
+1.0,20260814-sunyeong-002,KURLY,SEARCH,용가리,1001393921,"담기 샛별배송 [하림] 킹용가리 770g 식탁에 찾아온 커다란 공룡 9,700원 10%8,720원 163",https://www.kurly.com/goods/1001393921,2,2026-08-14T20:20:55.439155+09:00,DISCOVERED
+1.0,20260814-sunyeong-002,KURLY,SEARCH,용가리,1000086328,"최대20%쿠폰 담기 샛별배송 [하림] 용가리 떡갈비 600g 떡이 콕콕 박힌 공룡 모양 밥 반찬 11,500원 10%10,350원 999+",https://www.kurly.com/goods/1000086328,3,2026-08-14T20:20:55.439172+09:00,DISCOVERED
+1.0,20260814-sunyeong-002,KURLY,SEARCH,용가리,1001393929,"담기 샛별배송 [하림] 용가리치킨 볼 소이갈릭 450g 짭조름한 감칠맛의 간장 치킨 10,480원 67",https://www.kurly.com/goods/1001393929,4,2026-08-14T20:20:55.439182+09:00,DISCOVERED
+1.0,20260814-sunyeong-002,KURLY,SEARCH,용가리,5069883,"담기 샛별배송 [하림] 치킨너겟 850g 보고 먹는 재미를 한 번에 13,550원 15%11,510원 9,999+",https://www.kurly.com/goods/5069883,5,2026-08-14T20:20:55.439194+09:00,DISCOVERED
