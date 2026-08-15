@@ -182,7 +182,12 @@ docker compose run --rm ocr-parser python -m src.cli process-batch --manifest /d
 ```
 
 `.env`의 `BATCH_MEMBER`와 다른 팀원 배치는 자동으로 건너뜁니다.  
-큰 이미지는 `OCR_MAX_IMAGE_SIDE`(기본 1600)로 줄여 OCR합니다.
+큰 이미지는 `OCR_MAX_IMAGE_SIDE`(기본 1600)로 줄여 OCR합니다. 기본값으로
+`OCR_DISCLOSURE_GATE_ENABLED=true`이면 먼저 긴 변 640px
+(`OCR_DISCLOSURE_GATE_MAX_IMAGE_SIDE`)의 저해상도 OCR에서 소비기한·유통기한·보관·
+식품유형 키워드를 확인합니다. 상품명·브랜드 문구만 있는 이미지는 풀 OCR을 생략하고
+게이트 OCR 원문만 `ocr_raw`에 남깁니다. 품질 비교가 필요하면
+`OCR_DISCLOSURE_GATE_ENABLED=false`로 기존 풀 OCR 동작을 사용할 수 있습니다.
 
 ### 3단계 결과
 

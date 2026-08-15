@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import gc
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from .checksum import calculate_sha256
+from .disclosure_gate import (
+    disclosure_gate_enabled,
+    disclosure_gate_max_image_side,
+    has_disclosure_keywords,
+)
 from .disclosure_parser import parse_disclosure_text
 from .exporter import (
     append_product_csv,
@@ -16,20 +23,12 @@ from .exporter import (
 from .image_preprocess import prepare_image_for_ocr
 from .merge_policy import merge_field, overall_validation_status
 from .models import MergedProductRecord, ProductInput, RawOcrRecord
-from .ocr_engine import PaddleOcrEngine
+
+if TYPE_CHECKING:
+    from .ocr_engine import PaddleOcrEngine
 
 
 KST = ZoneInfo("Asia/Seoul")
-
-TARGET_FIELD_KEYWORDS = (
-    "소비기한",
-    "유통기한",
-    "보관방법",
-    "보관",
-    "식품유형",
-    "식품의 유형",
-)
-
 
 class ProductOcrPipeline:
     def __init__(self, parser_version: str = "0.1.0", language: str = "korean") -> None:
@@ -41,6 +40,8 @@ class ProductOcrPipeline:
     @property
     def engine(self) -> PaddleOcrEngine:
         if self._engine is None:
+            from .ocr_engine import PaddleOcrEngine
+
             self._engine = PaddleOcrEngine(language=self.language)
         return self._engine
 
@@ -127,6 +128,44 @@ class ProductOcrPipeline:
             return None, csv_path
 
         collected_at = datetime.now(KST)
+        gate_result = None
+        if disclosure_gate_enabled():
+            gate_input, is_gate_temp = prepare_image_for_ocr(
+                image_path,
+                max_side=disclosure_gate_max_image_side(),
+            )
+            try:
+                gate_result = self.engine.recognize(gate_input)
+            finally:
+                if is_gate_temp:
+                    gate_input.unlink(missing_ok=True)
+
+            if not has_disclosure_keywords(gate_result.full_text):
+                raw_path = self._write_raw_record(
+                    product=product,
+                    data_root=data_root,
+                    image_path=image_path,
+                    image_hash=image_hash,
+                    source_record_id=source_record_id,
+                    ocr_result=gate_result,
+                    collected_at=collected_at,
+                )
+                seen.add(dedupe_key)
+                seen.add(source_record_id)
+                if product.expiration_info_dom or product.storage_method_dom:
+                    product_key = build_dedupe_key(
+                        product.source_site,
+                        product.original_product_id,
+                    )
+                    if product_key not in seen:
+                        _, csv_path = self._process_dom_only(product, csv_path)
+                del gate_result
+                gc.collect()
+                return raw_path, csv_path
+
+            del gate_result
+            gc.collect()
+
         ocr_input, is_temp = prepare_image_for_ocr(image_path)
         try:
             ocr_result = self.engine.recognize(ocr_input)
@@ -136,29 +175,17 @@ class ProductOcrPipeline:
         if not ocr_result.full_text.strip():
             raise ValueError("OCR_TEXT_EMPTY")
 
-        raw_record = RawOcrRecord(
+        raw_path = self._write_raw_record(
+            product=product,
+            data_root=data_root,
+            image_path=image_path,
+            image_hash=image_hash,
             source_record_id=source_record_id,
-            source_site=product.source_site,
-            batch_id=product.batch_id,
-            original_product_id=product.original_product_id,
-            product_name=product.product_name,
-            product_url=str(product.product_url),
-            source_image_url=(
-                str(product.source_image_url) if product.source_image_url else None
-            ),
-            local_image_name=image_path.name,
-            image_sha256=image_hash,
-            ocr_engine=self.engine.name,
-            ocr_engine_version=self.engine.version,
-            ocr_confidence=ocr_result.confidence,
-            ocr_raw_text=ocr_result.full_text,
-            text_blocks=ocr_result.blocks,
-            engine_raw_result=ocr_result.raw_result,
+            ocr_result=ocr_result,
             collected_at=collected_at,
         )
-        raw_path = write_raw_json(raw_record, data_root / "ocr_raw")
 
-        if not _has_target_fields(ocr_result.full_text):
+        if not has_disclosure_keywords(ocr_result.full_text):
             seen.add(dedupe_key)
             seen.add(source_record_id)
             if product.expiration_info_dom or product.storage_method_dom:
@@ -207,6 +234,39 @@ class ProductOcrPipeline:
         seen.add(source_record_id)
         return raw_path, csv_path
 
+    def _write_raw_record(
+        self,
+        *,
+        product: ProductInput,
+        data_root: Path,
+        image_path: Path,
+        image_hash: str,
+        source_record_id: str,
+        ocr_result,
+        collected_at: datetime,
+    ) -> Path:
+        raw_record = RawOcrRecord(
+            source_record_id=source_record_id,
+            source_site=product.source_site,
+            batch_id=product.batch_id,
+            original_product_id=product.original_product_id,
+            product_name=product.product_name,
+            product_url=str(product.product_url),
+            source_image_url=(
+                str(product.source_image_url) if product.source_image_url else None
+            ),
+            local_image_name=image_path.name,
+            image_sha256=image_hash,
+            ocr_engine=self.engine.name,
+            ocr_engine_version=self.engine.version,
+            ocr_confidence=ocr_result.confidence,
+            ocr_raw_text=ocr_result.full_text,
+            text_blocks=ocr_result.blocks,
+            engine_raw_result=ocr_result.raw_result,
+            collected_at=collected_at,
+        )
+        return write_raw_json(raw_record, data_root / "ocr_raw")
+
     def _build_merged_record(
         self,
         *,
@@ -248,11 +308,6 @@ class ProductOcrPipeline:
             source_record_id=source_record_id,
             image_sha256=image_sha256,
         )
-
-
-def _has_target_fields(text: str) -> bool:
-    compact = text.replace(" ", "")
-    return any(keyword.replace(" ", "") in compact for keyword in TARGET_FIELD_KEYWORDS)
 
 
 def _infer_storage_type(*texts: str | None) -> str:
