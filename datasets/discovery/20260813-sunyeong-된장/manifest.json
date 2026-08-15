@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260813-sunyeong-된장",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "된장",
+  "requested_url": "https://www.kurly.com/search?sword=%EB%90%9C%EC%9E%A5",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-13T17:41:37.304583+09:00",
+  "finished_at": "2026-08-13T17:41:39.306849+09:00",
+  "status": "COMPLETED"
+}

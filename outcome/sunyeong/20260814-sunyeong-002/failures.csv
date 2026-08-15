@@ -1,0 +1,4 @@
+﻿batch_id,source_site,original_product_id,product_name,product_url,image_path,error_code,error_message,failed_at
+20260814-sunyeong-002,KURLY,5069882,[하림] 용가리 치킨 850g,https://www.kurly.com/goods/5069882,detail_images/5069882_01_01b76eb8bd76.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-14T20:29:10.940667+09:00
+20260814-sunyeong-002,KURLY,1000086328,[하림] 용가리 떡갈비 600g,https://www.kurly.com/goods/1000086328,detail_images/1000086328_01_3e59f1911e2f.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-14T21:18:09.065387+09:00
+20260814-sunyeong-002,KURLY,5069883,[하림] 치킨너겟 850g,https://www.kurly.com/goods/5069883,detail_images/5069883_01_2d34688e7e70.jpg,OCR_TEXT_EMPTY,OCR_TEXT_EMPTY,2026-08-14T21:44:45.485466+09:00

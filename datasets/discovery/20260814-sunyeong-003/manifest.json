@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260814-sunyeong-003",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "명란젓 속초해품",
+  "requested_url": "https://www.kurly.com/search?sword=%EB%AA%85%EB%9E%80%EC%A0%93%20%EC%86%8D%EC%B4%88%ED%95%B4%ED%92%88",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-14T22:14:42.009400+09:00",
+  "finished_at": "2026-08-14T22:14:45.493978+09:00",
+  "status": "COMPLETED"
+}
