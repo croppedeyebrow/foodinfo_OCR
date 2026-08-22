@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0.0",
+  "batch_id": "20260822-jaeseong-001",
+  "member": "jaeseong",
+  "status": "ACCEPTED",
+  "generated_at": "2026-08-22T16:59:41.857871+09:00",
+  "required_files": {
+    "discovered_products.csv": true,
+    "crawled_products.csv": true,
+    "image_text_check.csv": true,
+    "products.csv": true
+  },
+  "counts": {
+    "discovered": 10,
+    "crawled": 57,
+    "image_checks": 57,
+    "products": 20,
+    "failures": 0
+  },
+  "schema_versions": [
+    "1.0"
+  ],
+  "parser_versions": [
+    "0.2.0"
+  ],
+  "batch_sha256": "00b85b2d8cd81ad6eb50f17f4a76f0a3482b14b70995f2cb4795fff428482e20",
+  "products_sha256": "3ab563e1d75c881803627e45220ed1e51d708e31f38fd0c2788df37d32314d40",
+  "submission_content_hash": "7364257ef820a6296c63f6d37e1e212db2c8be8a3c267915dff812f86aa80b8e",
+  "checksum_status": "VALID",
+  "errors": [],
+  "duplicate": false
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260822-jaeseong-001",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "닭다리",
+  "requested_url": "https://www.kurly.com/search?sword=%EB%8B%AD%EB%8B%A4%EB%A6%AC",
+  "max_products": 10,
+  "max_scrolls": 5,
+  "discovered_count": 10,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-22T16:40:45.994561+09:00",
+  "finished_at": "2026-08-22T16:40:52.310920+09:00",
+  "status": "COMPLETED"
+}

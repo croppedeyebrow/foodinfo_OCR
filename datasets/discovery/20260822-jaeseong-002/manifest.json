@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260822-jaeseong-002",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "안창살",
+  "requested_url": "https://www.kurly.com/search?sword=%EC%95%88%EC%B0%BD%EC%82%B4",
+  "max_products": 20,
+  "max_scrolls": 5,
+  "discovered_count": 20,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-22T17:00:45.498372+09:00",
+  "finished_at": "2026-08-22T17:00:51.877019+09:00",
+  "status": "COMPLETED"
+}
