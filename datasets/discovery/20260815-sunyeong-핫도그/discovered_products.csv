@@ -1,0 +1,6 @@
+﻿schema_version,batch_id,source_site,source_mode,source_value,original_product_id,product_name_preview,product_url,discovery_order,discovered_at,discovery_status
+1.0,20260815-sunyeong-핫도그,KURLY,SEARCH,고메 핫도그,5136015,"멤버스25%쿠폰 담기 샛별배송 [고메] 오리지널 핫도그 400g(80gX5개입) 통통한 소시지를 품은 달콤 핫도그 6,980원 14%5,980원 999+",https://www.kurly.com/goods/5136015,1,2026-08-15T22:08:06.884891+09:00,DISCOVERED
+1.0,20260815-sunyeong-핫도그,KURLY,SEARCH,고메 핫도그,5101000,"담기 샛별배송 [고메] 치즈크리스피 핫도그 340g(85gX4개입) 고소하고 쫄깃한 치즈 가득 8,480원 17%6,980원 999+",https://www.kurly.com/goods/5101000,2,2026-08-15T22:08:06.885171+09:00,DISCOVERED
+1.0,20260815-sunyeong-핫도그,KURLY,SEARCH,고메 핫도그,5100657,"담기 샛별배송 [고메] 포테이토치즈 핫도그 400g(100gX4개입) 다채로운 맛과 식감이 매력적인 9,980원 10%8,980원 999+",https://www.kurly.com/goods/5100657,3,2026-08-15T22:08:06.885200+09:00,DISCOVERED
+1.0,20260815-sunyeong-핫도그,KURLY,SEARCH,고메 핫도그,1002049369,"멤버스25%쿠폰 담기 샛별배송 [고메] 크리스피 핫도그 720g(80gX9개입) 16,980원 23%12,980원 35",https://www.kurly.com/goods/1002049369,4,2026-08-15T22:08:06.885222+09:00,DISCOVERED
+1.0,20260815-sunyeong-핫도그,KURLY,SEARCH,고메 핫도그,5025430,"담기 샛별배송 [고메] 크리스피 핫도그 400g(80gX5개입) 빵 맛이 남다른 인기 핫도그 8,480원 17%6,980원 9,999+",https://www.kurly.com/goods/5025430,5,2026-08-15T22:08:06.885249+09:00,DISCOVERED

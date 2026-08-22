@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260815-sunyeong-001",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "오뚜기 냉동피자",
+  "requested_url": "https://www.kurly.com/search?sword=%EC%98%A4%EB%9A%9C%EA%B8%B0%20%EB%83%89%EB%8F%99%ED%94%BC%EC%9E%90",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-15T00:06:49.003810+09:00",
+  "finished_at": "2026-08-15T00:06:50.552786+09:00",
+  "status": "COMPLETED"
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260815-sunyeong-핫도그",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "고메 핫도그",
+  "requested_url": "https://www.kurly.com/search?sword=%EA%B3%A0%EB%A9%94%20%ED%95%AB%EB%8F%84%EA%B7%B8",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-15T22:08:01.041745+09:00",
+  "finished_at": "2026-08-15T22:08:06.889162+09:00",
+  "status": "COMPLETED"
+}

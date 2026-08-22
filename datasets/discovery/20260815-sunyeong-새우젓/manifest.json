@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260815-sunyeong-새우젓",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "새우젓",
+  "requested_url": "https://www.kurly.com/search?sword=%EC%83%88%EC%9A%B0%EC%A0%93",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-15T20:37:33.265160+09:00",
+  "finished_at": "2026-08-15T20:37:38.177932+09:00",
+  "status": "COMPLETED"
+}

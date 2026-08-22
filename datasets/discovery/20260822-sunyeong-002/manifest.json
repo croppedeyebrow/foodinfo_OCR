@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260822-sunyeong-002",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "냉동 돈까스",
+  "requested_url": "https://www.kurly.com/search?sword=%EB%83%89%EB%8F%99%20%EB%8F%88%EA%B9%8C%EC%8A%A4",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-22T18:15:54.844893+09:00",
+  "finished_at": "2026-08-22T18:15:56.580732+09:00",
+  "status": "COMPLETED"
+}
