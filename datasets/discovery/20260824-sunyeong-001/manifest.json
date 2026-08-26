@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260824-sunyeong-001",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "냉동 떡볶이",
+  "requested_url": "https://www.kurly.com/search?sword=%EB%83%89%EB%8F%99%20%EB%96%A1%EB%B3%B6%EC%9D%B4",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-24T21:28:02.577195+09:00",
+  "finished_at": "2026-08-24T21:28:04.319716+09:00",
+  "status": "COMPLETED"
+}

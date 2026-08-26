@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "20260824-sunyeong-002",
+  "source_site": "KURLY",
+  "source_mode": "SEARCH",
+  "source_value": "냉동 우동",
+  "requested_url": "https://www.kurly.com/search?sword=%EB%83%89%EB%8F%99%20%EC%9A%B0%EB%8F%99",
+  "max_products": 5,
+  "max_scrolls": 3,
+  "discovered_count": 5,
+  "duplicate_count": 0,
+  "stop_reason": "MAX_PRODUCTS_REACHED",
+  "started_at": "2026-08-24T22:29:27.401128+09:00",
+  "finished_at": "2026-08-24T22:29:30.168024+09:00",
+  "status": "COMPLETED"
+}
