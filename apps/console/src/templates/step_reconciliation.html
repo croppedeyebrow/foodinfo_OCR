@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}8. 대조·품질 · Pipeline Console{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>8단계 · Kurly–KFIA 대조·품질검토</h1>
+  <p class="lead">
+    Kurly Silver와 KFIA Reference Silver를 결정적으로 대조합니다.
+    불확실한 결과는 자동 승인하지 않고 검토 대상으로 남깁니다.
+  </p>
+
+  {% if not kurly_batches or not kfia_datasets %}
+  <p class="hint">
+    {% if not kurly_batches %}Kurly Silver가 있는 배치가 없습니다. 6단계 파이프라인을 먼저 실행하세요.{% endif %}
+    {% if not kfia_datasets %}등록된 KFIA dataset이 없습니다. 7단계에서 기준 데이터를 등록하세요.{% endif %}
+  </p>
+  {% else %}
+  <form method="get" action="/steps/reconciliation" class="row" style="margin-bottom:1rem;">
+    <label>
+      Kurly Silver 배치
+      <select name="kurly_batch_id" onchange="this.form.submit()">
+        {% for batch_id in kurly_batches %}
+        <option value="{{ batch_id }}" {% if batch_id == selected_kurly_batch %}selected{% endif %}>
+          {{ batch_id }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      KFIA Reference dataset
+      <select name="kfia_dataset_version" onchange="this.form.submit()">
+        {% for version in kfia_datasets %}
+        <option value="{{ version }}" {% if version == selected_kfia_dataset %}selected{% endif %}>
+          {{ version }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+
+  {% if pair_id and reconcile_status and not reconcile_status.error %}
+  <p class="hint" style="margin-top:0;">
+    pair id <code>{{ pair_id }}</code>
+  </p>
+
+  <div
+    id="pipeline-status-panel"
+    hx-get="/steps/reconciliation/partials/status/{{ pair_id }}"
+    hx-trigger="load, every 2s"
+    hx-swap="innerHTML"
+  >
+    {% with pipeline_status=reconcile_status %}
+    {% include "partials/pipeline_status.html" %}
+    {% endwith %}
+  </div>
+
+  <div class="actions" style="margin-top:1rem;">
+  {% for stage in reconcile_stages %}
+    <button
+      type="button"
+      class="btn pipeline-run-btn"
+      data-batch-id="{{ pair_id }}"
+      data-stage-key="{{ stage.stage_key }}"
+    >{{ stage.display_name }} 실행</button>
+  {% endfor %}
+  </div>
+  <p id="pipeline-action-message" class="hint" style="margin-top:0.75rem;"></p>
+
+  {% if reconcile_summary %}
+  <div class="panel" style="margin-top:1rem;">
+    <h2>대조 요약</h2>
+    <p class="hint">
+      입력 {{ reconcile_summary.input_count }}건 · 승인 {{ reconcile_summary.approved_count }}건 ·
+      검토 {{ reconcile_summary.review_required_count }}건 · 미기준
+      {{ reconcile_summary.no_reference_count }}건 · rule
+      <code>{{ reconcile_summary.rule_version }}</code>
+    </p>
+    <div class="actions">
+      <a class="btn" href="/api/reconciliation/pairs/{{ pair_id }}/review.csv">검토 CSV</a>
+    </div>
+  </div>
+  {% endif %}
+  {% elif reconcile_status and reconcile_status.error %}
+  <div class="error" style="margin-top:1rem;">
+    <p><strong>대조 상태를 불러오지 못했습니다.</strong></p>
+    <p>{{ reconcile_status.error }}</p>
+  </div>
+  {% endif %}
+  {% endif %}
+</section>
+
+<script>
+(function () {
+  const message = document.getElementById("pipeline-action-message");
+  document.querySelectorAll(".pipeline-run-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const batchId = button.dataset.batchId;
+      const stageKey = button.dataset.stageKey;
+      if (!batchId || !stageKey) return;
+      button.disabled = true;
+      if (message) message.textContent = "run 생성 중...";
+      try {
+        const response = await fetch(
+          `/api/pipeline/batches/${encodeURIComponent(batchId)}/stages/${encodeURIComponent(stageKey)}/runs`,
+          { method: "POST" }
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.detail?.message || payload.detail || response.statusText);
+        }
+        if (message) message.textContent = `run ${payload.run_id} 시작됨`;
+      } catch (error) {
+        if (message) message.textContent = String(error.message || error);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

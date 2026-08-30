@@ -8,9 +8,10 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from .auth import is_operator, resolve_operator_batch, resolve_operator_dataset
+from .auth import is_operator, resolve_operator_batch, resolve_operator_dataset, resolve_reconcile_pair
 from .config import get_settings
 from .pipeline_gateway import (
+    append_reconciliation_decision,
     get_pipeline_service,
     is_reference_dataset_conflict,
     pipeline_error_response,
@@ -401,9 +402,41 @@ def _kfia_layer_manifest(data_root: Path, layer: str, dataset_version: str) -> d
 
 
 def _resolve_pipeline_scope(batch_id: str, stage_key: str) -> tuple[str, str]:
+    if stage_key == "kurly_kfia_reconcile":
+        return resolve_reconcile_pair(batch_id)
     if stage_key.startswith("kfia_"):
         return resolve_operator_dataset(batch_id)
     return resolve_operator_batch(batch_id)
+
+
+def _kurly_batches_with_silver() -> list[str]:
+    settings = get_settings()
+    silver_root = settings.datasets_root / "silver" / "kurly"
+    if not silver_root.is_dir():
+        return []
+    batches: list[str] = []
+    for child in sorted(silver_root.iterdir()):
+        if child.is_dir() and (child / "manifest.json").is_file():
+            batches.append(child.name)
+    return batches
+
+
+def _reconcile_pair_id(kurly_batch_id: str, kfia_dataset_version: str) -> str:
+    return f"{kurly_batch_id}__{kfia_dataset_version}"
+
+
+def _reconciled_manifest(data_root: Path, pair_id: str) -> dict | None:
+    path = data_root / "reconciled" / pair_id / "manifest.json"
+    if not path.is_file():
+        return None
+    import json
+
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _reconcile_stage_keys() -> list[dict[str, str]]:
+    service = get_pipeline_service()
+    return service.list_stage_keys(stage_key_prefix="kurly_kfia_")
 
 
 @app.get("/steps/reference", response_model=None)
@@ -473,6 +506,136 @@ def reference_status_partial(request: Request, dataset_version: str) -> HTMLResp
         "partials/pipeline_status.html",
         {"pipeline_status": reference_status},
     )
+
+
+@app.get("/steps/reconciliation", response_model=None)
+def step_reconciliation(
+    request: Request,
+    kurly_batch_id: str | None = None,
+    kfia_dataset_version: str | None = None,
+) -> HTMLResponse | RedirectResponse:
+    redirect = _operator_redirect()
+    if redirect is not None:
+        return redirect
+    settings = get_settings()
+    kurly_batches = _kurly_batches_with_silver()
+    kfia_datasets = _reference_datasets()
+    selected_kurly = kurly_batch_id or (kurly_batches[-1] if kurly_batches else "")
+    selected_kfia = kfia_dataset_version or (kfia_datasets[-1] if kfia_datasets else "")
+    pair_id = ""
+    status_payload = None
+    reconcile_summary = None
+    stages: list[dict[str, str]] = []
+    if selected_kurly and selected_kfia:
+        pair_id = _reconcile_pair_id(selected_kurly, selected_kfia)
+        try:
+            resolve_reconcile_pair(pair_id, settings=settings)
+            service = get_pipeline_service()
+            status_payload = service.get_batch_status(
+                pair_id, stage_key_prefix="kurly_kfia_"
+            )
+            stages = _reconcile_stage_keys()
+            reconcile_summary = _reconciled_manifest(settings.datasets_root, pair_id)
+        except Exception as error:
+            status_payload = {"error": str(error)}
+    context = _base_context("reconciliation")
+    context.update(
+        {
+            "kurly_batches": kurly_batches,
+            "kfia_datasets": kfia_datasets,
+            "selected_kurly_batch": selected_kurly,
+            "selected_kfia_dataset": selected_kfia,
+            "pair_id": pair_id,
+            "reconcile_status": status_payload,
+            "reconcile_stages": stages,
+            "reconcile_summary": reconcile_summary,
+        }
+    )
+    return templates.TemplateResponse(request, "step_reconciliation.html", context)
+
+
+@app.get("/steps/reconciliation/partials/status/{pair_id:path}", response_class=HTMLResponse)
+def reconciliation_status_partial(request: Request, pair_id: str) -> HTMLResponse:
+    redirect = _operator_redirect()
+    if redirect is not None:
+        return HTMLResponse("권한 없음", status_code=403)
+    try:
+        resolve_reconcile_pair(pair_id)
+    except ValueError as error:
+        return HTMLResponse(str(error), status_code=400)
+    service = get_pipeline_service()
+    reconcile_status = service.get_batch_status(
+        pair_id, stage_key_prefix="kurly_kfia_"
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/pipeline_status.html",
+        {"pipeline_status": reconcile_status},
+    )
+
+
+@app.get("/api/reconciliation/pairs/{pair_id:path}/review.csv")
+def api_reconciliation_review_csv(pair_id: str) -> FileResponse:
+    _require_operator_api()
+    try:
+        resolve_reconcile_pair(pair_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    settings = get_settings()
+    review_path = settings.datasets_root / "reconciled" / pair_id / "review.csv"
+    if not review_path.is_file():
+        raise HTTPException(status_code=404, detail="review.csv not found")
+    return FileResponse(
+        review_path,
+        media_type="text/csv",
+        filename=f"reconcile_{pair_id.replace('__', '_')}_review.csv",
+    )
+
+
+@app.post("/api/reconciliation/decisions")
+async def api_reconciliation_decision(request: Request) -> dict:
+    _require_operator_api()
+    import uuid
+    from datetime import datetime
+
+    body = await request.json()
+    pair_id = str(body.get("pair_id") or "").strip()
+    reconciled_record_id = str(body.get("reconciled_record_id") or "").strip()
+    action = str(body.get("action") or "").strip()
+    reason = str(body.get("reason") or "").strip()
+    selected_kfia_record_id = body.get("selected_kfia_record_id")
+    if not pair_id or not reconciled_record_id or not action or not reason:
+        raise HTTPException(status_code=400, detail="필수 필드가 누락되었습니다.")
+    try:
+        _, reviewer = resolve_reconcile_pair(pair_id)
+        kurly_batch_id, kfia_dataset_version = pair_id.split("__", 1)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    settings = get_settings()
+    decision = {
+        "schema_version": "1.0.0",
+        "decision_id": str(uuid.uuid4()),
+        "reconcile_pair_id": pair_id,
+        "reconciled_record_id": reconciled_record_id,
+        "kurly_batch_id": kurly_batch_id,
+        "kfia_dataset_version": kfia_dataset_version,
+        "reviewer": reviewer,
+        "decided_at": datetime.now(KST).isoformat(),
+        "action": action,
+        "reason": reason,
+        "selected_kfia_record_id": selected_kfia_record_id,
+        "rule_version": "kurly_kfia_reconcile_v1.0.0",
+    }
+    try:
+        path = append_reconciliation_decision(
+            data_root=settings.datasets_root,
+            pair_id=pair_id,
+            decision=decision,
+        )
+    except Exception as error:
+        status_code, payload = pipeline_error_response(error)
+        raise HTTPException(status_code=status_code, detail=payload) from error
+    return {"decision": decision, "path": path.as_posix()}
 
 
 @app.get("/steps/pipeline", response_model=None)

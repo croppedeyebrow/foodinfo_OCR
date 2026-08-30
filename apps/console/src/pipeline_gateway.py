@@ -163,3 +163,21 @@ def validate_reference_dataset(
 
 def is_reference_dataset_conflict(error: Exception) -> bool:
     return type(error).__name__ == "DatasetVersionConflictError"
+
+
+def append_reconciliation_decision(
+    *,
+    data_root: Path,
+    pair_id: str,
+    decision: dict[str, Any],
+) -> Path:
+    def _run():
+        from src.reconciliation import append_review_decision
+
+        return append_review_decision(
+            data_root=data_root,
+            pair_id=pair_id,
+            decision=decision,
+        )
+
+    return run_with_normalizer_import(_run)

@@ -52,3 +52,24 @@ def resolve_operator_dataset(
     if not member:
         raise ValueError("CONSOLE_OPERATOR가 설정되지 않았습니다.")
     return dataset_version.strip(), member
+
+
+def resolve_reconcile_pair(
+    pair_id: str, *, settings: Settings | None = None
+) -> tuple[str, str]:
+    current = settings or get_settings()
+    if not is_operator(current):
+        raise ValueError("OPERATOR 권한이 필요합니다.")
+    if "__" not in pair_id:
+        raise ValueError(
+            "대조 pair id는 '{kurly_batch}__{kfia_dataset}' 형식이어야 합니다."
+        )
+    kurly_batch_id, kfia_dataset_version = pair_id.split("__", 1)
+    if not kurly_batch_id or not kfia_dataset_version:
+        raise ValueError("대조 pair id가 불완전합니다.")
+    resolve_operator_batch(kurly_batch_id, settings=current)
+    resolve_operator_dataset(kfia_dataset_version, settings=current)
+    member = current.console_operator.strip()
+    if not member:
+        raise ValueError("CONSOLE_OPERATOR가 설정되지 않았습니다.")
+    return pair_id, member

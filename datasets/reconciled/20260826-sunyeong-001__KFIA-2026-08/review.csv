@@ -1,0 +1,2 @@
+reconciled_record_id,kurly_record_id,food_name_normalized,kurly_storage_type,kurly_expiration_text,match_type,review_status,rule_id,confidence,candidate_kfia_record_ids
+8d434664-cc61-5832-abc2-de3bc80b828b,20260826-sunyeong-001:KURLY:1000134705,라이킷 식단관리 도시락 8종 (택2),FROZEN,이 27.05.12 이후(해당일 포함)인 상품 발송,NO_REFERENCE,REVIEW_REQUIRED,RECONCILE-005,0.0,""

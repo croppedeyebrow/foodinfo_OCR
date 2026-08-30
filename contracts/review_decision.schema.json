@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neulsom.local/schemas/review-decision-1.0.0.json",
+  "title": "Reconciliation review decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "decision_id",
+    "reconcile_pair_id",
+    "reconciled_record_id",
+    "kurly_batch_id",
+    "kfia_dataset_version",
+    "reviewer",
+    "decided_at",
+    "action",
+    "reason"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "decision_id": { "type": "string", "minLength": 1 },
+    "reconcile_pair_id": { "type": "string", "minLength": 1 },
+    "reconciled_record_id": { "type": "string", "minLength": 1 },
+    "kurly_batch_id": { "type": "string", "minLength": 1 },
+    "kfia_dataset_version": { "type": "string", "minLength": 1 },
+    "reviewer": { "type": "string", "minLength": 1 },
+    "decided_at": { "type": "string", "minLength": 1 },
+    "action": {
+      "type": "string",
+      "enum": ["APPROVE", "REJECT", "SELECT_CANDIDATE"]
+    },
+    "reason": { "type": "string", "minLength": 1 },
+    "selected_kfia_record_id": { "type": ["string", "null"] },
+    "rule_version": { "type": ["string", "null"] }
+  }
+}

@@ -14,6 +14,8 @@ LAYER_DIRS = (
     "reference/inbox",
     "bronze",
     "silver",
+    "reconciled",
+    "reconciled/mappings",
     "gold",
     "quarantine",
 )
@@ -58,6 +60,10 @@ def quarantine_run_dir(data_root: Path, run_id: str) -> Path:
 
 def quarantine_batch_dir(data_root: Path, batch_id: str) -> Path:
     return data_root / "quarantine" / batch_id
+
+
+def reconciled_pair_dir(data_root: Path, pair_id: str) -> Path:
+    return data_root / "reconciled" / pair_id
 
 
 def batch_manifest_path(batch_dir: Path) -> Path:

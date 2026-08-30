@@ -23,6 +23,7 @@ SUPPORTED_MAJOR = {
     "mfds_raw_record": {1},
     "normalized_freshness": {1},
     "reconciled_freshness": {1},
+    "review_decision": {1},
     "gold_freshness": {1},
     "ocr_record": {1},
 }
@@ -37,6 +38,7 @@ CONTRACT_SCHEMA_FILES = {
     "mfds_raw_record": "mfds_raw_record.schema.json",
     "normalized_freshness": "normalized_freshness.schema.json",
     "reconciled_freshness": "reconciled_freshness.schema.json",
+    "review_decision": "review_decision.schema.json",
     "gold_freshness": "gold_freshness.schema.json",
     "ocr_record": "ocr_record.schema.json",
 }
