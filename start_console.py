@@ -410,6 +410,7 @@ def _run_docker(
             platform_started = True
 
         cmd = ["docker", "compose", "up", "--build", "console"]
+        # postgres는 compose.yaml depends_on으로 함께 기동됩니다 (pipeline metadata용).
         return subprocess.call(cmd, cwd=str(ROOT), env=env)
     except FileNotFoundError:
         print("[console] docker not found. Install Docker Desktop, or use --local.")

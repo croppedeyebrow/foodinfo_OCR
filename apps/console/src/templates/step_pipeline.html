@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}6. 파이프라인 · Pipeline Console{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>6단계 · Pipeline Stage 실행</h1>
+  <p class="lead">
+    accepted 배치에 대해 Stage를 실행하고 PostgreSQL metadata에 run 상태를 기록합니다.
+    Dagster UI 대신 이 화면과 API를 사용합니다.
+  </p>
+
+  {% if not accepted_batches %}
+  <p class="hint">{{ empty_batches_hint }}</p>
+  {% else %}
+  <form method="get" action="/steps/pipeline" class="actions" style="margin-bottom:1rem;">
+    <label>
+      accepted 배치
+      <select name="batch_id" onchange="this.form.submit()">
+        {% for row in accepted_batches %}
+        <option value="{{ row.batch_id }}" {% if row.batch_id == selected_batch %}selected{% endif %}>
+          {{ row.member }} · {{ row.batch_id }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+
+  {% if selected_batch and pipeline_status and not pipeline_status.error %}
+  <div
+    id="pipeline-status-panel"
+    hx-get="/steps/pipeline/partials/status/{{ selected_batch }}"
+    hx-trigger="load, every 2s"
+    hx-swap="innerHTML"
+  >
+    {% include "partials/pipeline_status.html" %}
+  </div>
+
+  <div class="actions" style="margin-top:1rem;">
+  {% for stage in pipeline_stages %}
+    <button
+      type="button"
+      class="btn pipeline-run-btn"
+      data-batch-id="{{ selected_batch }}"
+      data-stage-key="{{ stage.stage_key }}"
+    >{{ stage.display_name }} 실행</button>
+  {% endfor %}
+  </div>
+  <p id="pipeline-action-message" class="hint" style="margin-top:0.75rem;"></p>
+
+  {% if bronze_summary %}
+  <div class="panel" style="margin-top:1rem;">
+    <h2>Bronze 요약</h2>
+    <p class="hint">
+      입력 {{ bronze_summary.input_count }}건 · 정상 {{ bronze_summary.valid_count }}건 ·
+      격리 {{ bronze_summary.quarantine_count }}건
+    </p>
+  </div>
+  {% endif %}
+
+  {% if silver_summary %}
+  <div class="panel" style="margin-top:1rem;">
+    <h2>Silver 요약</h2>
+    <p class="hint">
+      고유상품 {{ silver_summary.unique_product_count }}건 · 파싱성공
+      {{ silver_summary.parse_success_count }}건 · 검토필요
+      {{ silver_summary.review_required_count }}건 · evidence 보존율
+      {{ (silver_summary.evidence_preservation_rate * 100) | round(0) }}%
+    </p>
+    <div class="actions">
+      <a class="btn" href="/steps/pipeline/evidence/{{ selected_batch }}">상품 근거 보기</a>
+      <a class="btn" href="/api/pipeline/batches/{{ selected_batch }}/silver/review.csv">검토 CSV</a>
+    </div>
+  </div>
+  {% endif %}
+  {% elif pipeline_status and pipeline_status.error %}
+  <div class="error" style="margin-top:1rem;">
+    <p><strong>파이프라인을 불러오지 못했습니다.</strong></p>
+    <p>{{ pipeline_status.error }}</p>
+    <p class="hint" style="margin-top:0.75rem;">
+      Docker로 실행 중이면 <code>docker compose build console</code> 후 재시작하세요.
+      로컬 실행이면 <code>pip install -r apps/console/requirements.txt</code>로 polars 등 의존성을 설치하세요.
+    </p>
+  </div>
+  {% endif %}
+  {% endif %}
+</section>
+
+<script>
+(function () {
+  const message = document.getElementById("pipeline-action-message");
+  document.querySelectorAll(".pipeline-run-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const batchId = button.dataset.batchId;
+      const stageKey = button.dataset.stageKey;
+      if (!batchId || !stageKey) return;
+      button.disabled = true;
+      if (message) message.textContent = "run 생성 중...";
+      try {
+        const response = await fetch(
+          `/api/pipeline/batches/${encodeURIComponent(batchId)}/stages/${encodeURIComponent(stageKey)}/runs`,
+          { method: "POST" }
+        );
+        const payload = await response.json();
+        if (!response.ok) {
+          const detail = payload.detail || payload;
+          const text = typeof detail === "string"
+            ? detail
+            : detail.message || JSON.stringify(detail);
+          if (message) message.textContent = text;
+          return;
+        }
+        if (message) {
+          message.textContent = `run 시작: ${payload.run_id} (${payload.status})`;
+        }
+        const panel = document.getElementById("pipeline-status-panel");
+        if (panel) htmx.trigger(panel, "load");
+      } catch (error) {
+        if (message) message.textContent = String(error);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

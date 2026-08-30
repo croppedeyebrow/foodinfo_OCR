@@ -54,6 +54,7 @@ class SubmissionReport:
     checksum_status: str
     errors: list[dict[str, str]] = field(default_factory=list)
     duplicate: bool = False
+    submitted_by: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -261,6 +262,33 @@ def write_validation_report(report: SubmissionReport, path: Path) -> Path:
     return path
 
 
+def write_submission_audit(
+    *,
+    batch_dir: Path,
+    batch_id: str,
+    member: str,
+    submitted_by: str,
+    submitted_at: str,
+    duplicate: bool,
+) -> Path:
+    payload = {
+        "schema_version": "1.0.0",
+        "batch_id": batch_id,
+        "member": member,
+        "submitted_by": submitted_by,
+        "submitted_at": submitted_at,
+        "duplicate": duplicate,
+    }
+    path = batch_dir / "submission_audit.json"
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(temporary, path)
+    return path
+
+
 def local_report_path(outcome_root: Path, member: str, batch_id: str) -> Path:
     validate_batch_identity(batch_id, member)
     return outcome_root / member / batch_id / "validation_report.json"
@@ -319,6 +347,7 @@ def submit_collection_batch(
     batch_id: str,
     member: str,
     contracts_dir: Path | None = None,
+    submitted_by: str | None = None,
 ) -> SubmissionReport:
     outcome = validate_collection_batch(
         data_root=data_root,
@@ -329,6 +358,8 @@ def submit_collection_batch(
         manifest_status="ACCEPTED",
     )
     report = outcome.report
+    if submitted_by:
+        report.submitted_by = submitted_by
     if report.errors or outcome.payload is None:
         write_validation_report(
             report, local_report_path(outcome_root, member, batch_id)
@@ -376,6 +407,15 @@ def submit_collection_batch(
             write_validation_report(
                 report, local_report_path(outcome_root, member, batch_id)
             )
+            if submitted_by:
+                write_submission_audit(
+                    batch_dir=final_dir,
+                    batch_id=batch_id,
+                    member=member,
+                    submitted_by=submitted_by,
+                    submitted_at=report.generated_at,
+                    duplicate=True,
+                )
             return report
         raise SubmissionError(
             "BATCH_ALREADY_ACCEPTED_DIFFERENT_CONTENT",
@@ -422,6 +462,15 @@ def submit_collection_batch(
         report.status = "ACCEPTED"
         report.checksum_status = "VALID"
         write_validation_report(report, temporary_dir / "validation_report.json")
+        if submitted_by:
+            write_submission_audit(
+                batch_dir=temporary_dir,
+                batch_id=batch_id,
+                member=member,
+                submitted_by=submitted_by,
+                submitted_at=report.generated_at,
+                duplicate=False,
+            )
         os.replace(temporary_dir, final_dir)
     except Exception:
         if temporary_dir.exists():

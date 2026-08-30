@@ -186,8 +186,9 @@
       <a href="/steps/classify" class="{% if active_step == 'classify' %}active{% endif %}">2.5 판별</a>
       <a href="/steps/ocr" class="{% if active_step == 'ocr' %}active{% endif %}">3. OCR</a>
       <a href="/steps/team" class="{% if active_step == 'team' %}active{% endif %}">4. 팀 결과</a>
-      {% if platform_mode %}
-      <a href="/steps/platform" class="{% if active_step == 'platform' %}active{% endif %}">5. 플랫폼</a>
+      {% if is_operator %}
+      <a href="/steps/submit" class="{% if active_step == 'submit' %}active{% endif %}">5. 검증·제출</a>
+      <a href="/steps/pipeline" class="{% if active_step == 'pipeline' %}active{% endif %}">6. 파이프라인</a>
       {% endif %}
     </nav>
     {% block content %}{% endblock %}

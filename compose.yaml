@@ -33,6 +33,9 @@ services:
         "8787",
         "--reload",
       ]
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   crawler:
     build:

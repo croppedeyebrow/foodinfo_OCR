@@ -387,48 +387,22 @@ def build_validate_collection_command(batch_id: str, member: str) -> list[str]:
     )
 
 
-def build_submit_collection_command(batch_id: str, member: str) -> list[str]:
-    return build_compose_command(
-        "normalizer",
-        [
-            "submit-collection",
-            "--batch-id",
-            batch_id,
-            "--member",
-            member,
-        ],
-    )
-
-
-def build_compose_platform_exec_command(cli_args: Sequence[str]) -> list[str]:
-    command = ["docker", "compose"]
-    if _in_console_container():
-        command.extend(["-f", "/workspace/compose.yaml", "--project-directory", "/workspace"])
-    else:
-        host_dir = os.getenv("HOST_PROJECT_DIR", "").strip()
-        if host_dir:
-            command.extend(["--project-directory", host_dir.replace("\\", "/")])
-        compose_file = _compose_file_for_client()
-        if compose_file:
-            command.extend(["-f", compose_file])
-    command.extend(["--profile", "platform", "exec", "-T", "dagster", *cli_args])
-    return command
-
-
-def build_dagster_intake_command(batch_id: str) -> list[str]:
-    partition_script = (
-        "from dagster import DagsterInstance; "
-        "from orchestration.partitions import collection_batch_partitions; "
-        f"DagsterInstance.get().add_dynamic_partition("
-        f"collection_batch_partitions.name, {batch_id!r})"
-    )
-    shell = (
-        f"python -c {partition_script!r} && "
-        "dagster asset materialize -m orchestration.definitions "
-        "--select kurly_collection_submission,kurly_bronze_validated "
-        f"--partition {batch_id}"
-    )
-    return build_compose_platform_exec_command(["sh", "-c", shell])
+def build_submit_collection_command(
+    batch_id: str,
+    member: str,
+    *,
+    submitted_by: str | None = None,
+) -> list[str]:
+    args = [
+        "submit-collection",
+        "--batch-id",
+        batch_id,
+        "--member",
+        member,
+    ]
+    if submitted_by:
+        args.extend(["--submitted-by", submitted_by])
+    return build_compose_command("normalizer", args)
 
 
 class JobRunner:

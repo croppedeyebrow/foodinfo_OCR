@@ -183,6 +183,7 @@ def validate_collection_cmd(
 def submit_collection_cmd(
     batch_id: str = typer.Option(..., "--batch-id"),
     member: str = typer.Option(..., "--member"),
+    submitted_by: str | None = typer.Option(None, "--submitted-by"),
     data_root: Path = typer.Option(Path("/data"), "--data-root"),
     outcome_root: Path = typer.Option(Path("/outcome"), "--outcome-root"),
     contracts_dir: Path | None = typer.Option(None, "--contracts-dir"),
@@ -195,6 +196,7 @@ def submit_collection_cmd(
             batch_id=batch_id,
             member=member,
             contracts_dir=contracts_dir,
+            submitted_by=submitted_by,
         )
     except SubmissionError as error:
         typer.echo(f"{error.error_code}: {error}", err=True)

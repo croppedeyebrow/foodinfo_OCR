@@ -127,6 +127,37 @@ def test_submit_is_atomic_and_preserves_sources(
     )
     assert result.ok, result.issues
     assert manifest["status"] == "ACCEPTED"
+    assert manifest["member"] == MEMBER
+
+
+def test_operator_submission_records_audit(
+    normalizer_src: Path, tmp_path: Path
+) -> None:
+    from src.submission import submit_collection_batch
+
+    data_root, outcome_root = _batch_fixture(tmp_path)
+    report = submit_collection_batch(
+        data_root=data_root,
+        outcome_root=outcome_root,
+        batch_id=BATCH_ID,
+        member=MEMBER,
+        contracts_dir=CONTRACTS_DIR,
+        submitted_by="jaeseong",
+    )
+    assert report.submitted_by == "jaeseong"
+    accepted = data_root / "inbox" / "accepted" / BATCH_ID
+    manifest = json.loads((accepted / "manifest.json").read_text(encoding="utf-8"))
+    audit = json.loads((accepted / "submission_audit.json").read_text(encoding="utf-8"))
+    assert manifest["member"] == MEMBER
+    assert "submitted_by" not in manifest
+    assert audit["member"] == MEMBER
+    assert audit["submitted_by"] == "jaeseong"
+    local_report = json.loads(
+        (outcome_root / MEMBER / BATCH_ID / "validation_report.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert local_report["submitted_by"] == "jaeseong"
 
 
 def test_duplicate_submission_is_idempotent(

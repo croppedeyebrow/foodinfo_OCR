@@ -175,6 +175,89 @@ def validate_batch_selection(batch_id: str, member: str) -> None:
         raise ValueError("선택한 배치는 현재 BATCH_MEMBER 소유가 아닙니다.")
 
 
+def validate_operator_batch_selection(
+    batch_id: str,
+    member: str,
+    allowed_members: Sequence[str],
+) -> None:
+    if not BATCH_ID_PATTERN.fullmatch(batch_id):
+        raise ValueError("잘못된 batch_id 형식입니다.")
+    if not MEMBER_PATTERN.fullmatch(member):
+        raise ValueError("잘못된 member 형식입니다.")
+    if member not in allowed_members:
+        raise ValueError(f"운영자가 처리할 수 없는 생산자입니다: {member}")
+    if member not in [part for part in batch_id.split("-") if part]:
+        raise ValueError(f"batch_id '{batch_id}'는 member '{member}' 소유가 아닙니다.")
+
+
+OPERATOR_STATUS_LABELS = {
+    "UNVALIDATED": "미검증",
+    "VALIDATED": "검증성공",
+    "SUBMITTED": "제출완료",
+    "FAILED": "실패",
+}
+
+
+def operator_submission_status(
+    *,
+    accepted: bool,
+    report_status: str | None,
+    required_files_ok: bool,
+) -> tuple[str, str]:
+    if accepted:
+        return "SUBMITTED", OPERATOR_STATUS_LABELS["SUBMITTED"]
+    if report_status == "READY":
+        return "VALIDATED", OPERATOR_STATUS_LABELS["VALIDATED"]
+    if report_status == "REJECTED" or not required_files_ok:
+        return "FAILED", OPERATOR_STATUS_LABELS["FAILED"]
+    return "UNVALIDATED", OPERATOR_STATUS_LABELS["UNVALIDATED"]
+
+
+def summarize_operator_batches(
+    *,
+    datasets_root: Path,
+    outcome_root: Path,
+    allowed_members: Sequence[str],
+    member_filter: str | None = None,
+    include_submitted: bool = True,
+) -> list[dict]:
+    rows: list[dict] = []
+    for row in summarize_team_batches(
+        datasets_root=datasets_root,
+        outcome_root=outcome_root,
+        team_members=allowed_members,
+    ):
+        if row["products"] <= 0:
+            continue
+        if member_filter and row["member"] != member_filter:
+            continue
+        if not include_submitted and row["accepted"]:
+            continue
+        try:
+            submission = summarize_submission(
+                datasets_root=datasets_root,
+                outcome_root=outcome_root,
+                batch_id=row["batch_id"],
+                member=row["member"],
+            )
+        except ValueError:
+            continue
+        status_code, status_label = operator_submission_status(
+            accepted=row["accepted"],
+            report_status=str(submission.get("status") or ""),
+            required_files_ok=all(submission.get("required_files", {}).values()),
+        )
+        rows.append(
+            {
+                **row,
+                "submission_status": status_code,
+                "submission_status_label": status_label,
+                "validation_report_exists": submission.get("report_exists", False),
+            }
+        )
+    return rows
+
+
 def _load_json_object(path: Path) -> dict:
     if not path.is_file():
         return {}

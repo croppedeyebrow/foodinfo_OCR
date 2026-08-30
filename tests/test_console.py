@@ -5,9 +5,17 @@ from pathlib import Path
 
 import pytest
 
-from conftest import _clear_src_modules
+from conftest import _clear_src_modules, use_app, use_console
 
 CONSOLE_ROOT = Path(__file__).resolve().parents[1] / "apps" / "console"
+
+
+@pytest.fixture(autouse=True)
+def _restore_console_sys_path() -> None:
+    yield
+    use_console()
+
+
 _clear_src_modules()
 cleaned = [
     path
@@ -34,7 +42,6 @@ from src.runner import (  # noqa: E402
     build_discover_urls_command,
     build_docker_run_command,
     build_process_batch_command,
-    build_dagster_intake_command,
     build_submit_collection_command,
     build_validate_collection_command,
 )
@@ -42,10 +49,12 @@ from src.summaries import (  # noqa: E402
     count_csv_rows,
     infer_batch_member,
     list_discovery_batches,
+    summarize_operator_batches,
     summarize_submission,
     summarize_team_batches,
     summarize_text_checks,
     validate_batch_selection,
+    validate_operator_batch_selection,
 )
 
 
@@ -212,12 +221,15 @@ def test_build_process_batch_command_chunk() -> None:
 def test_build_submission_commands(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(runner_module, "_in_console_container", lambda: False)
     validate = build_validate_collection_command("b1-jaeseong", "jaeseong")
-    submit = build_submit_collection_command("b1-jaeseong", "jaeseong")
+    submit = build_submit_collection_command(
+        "b1-jaeseong", "jaeseong", submitted_by="operator"
+    )
     assert "normalizer" in validate
     assert "--no-deps" in validate
     assert "validate-collection" in validate
     assert "submit-collection" in submit
     assert "--member" in submit and "jaeseong" in submit
+    assert "--submitted-by" in submit and "operator" in submit
 
 
 def test_job_runner_queue_runs_sequentially(
@@ -417,38 +429,201 @@ def test_format_discovery_source() -> None:
     )["source_label"] == "URL목록: product_urls.txt"
 
 
-def test_build_dagster_intake_command(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(runner_module, "_in_console_container", lambda: True)
-    cmd = build_dagster_intake_command("20260811-jaeseong-001")
-    assert "docker" in cmd and "compose" in cmd
-    assert "--profile" in cmd and "platform" in cmd
-    assert "dagster" in cmd
-    assert "20260811-jaeseong-001" in " ".join(cmd)
+def test_operator_can_open_pipeline_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.config import get_settings
+    from src.main import app
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("CONSOLE_ROLE", "OPERATOR")
+    monkeypatch.setenv("ALLOWED_BATCH_MEMBERS", "jaeseong,sunyeong,woohee")
+    client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(app)
+    response = client.get("/steps/pipeline")
+    assert response.status_code == 200
+    assert "Pipeline Stage" in response.text
+    get_settings.cache_clear()
 
 
-def test_platform_routes_require_admin_flag(
+def test_pipeline_api_start_and_status(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from src.config import get_settings
+    from src.main import app
+    from src.pipeline_gateway import clear_pipeline_service_cache
+
+    get_settings.cache_clear()
+    clear_pipeline_service_cache()
+    monkeypatch.setenv("CONSOLE_ROLE", "OPERATOR")
+    monkeypatch.setenv("ALLOWED_BATCH_MEMBERS", "jaeseong,sunyeong,woohee")
+    monkeypatch.setenv("DATABASE_URL", "")
+    monkeypatch.setenv("DATASETS_ROOT", str(tmp_path / "datasets"))
+    monkeypatch.setenv("OUTCOME_HOST_ROOT", str(tmp_path / "outcome"))
+
+    from tests.test_pipeline_service import _accepted_batch
+
+    use_app("normalizer")
+    _accepted_batch(tmp_path)
+    use_console()
+    get_settings.cache_clear()
+    clear_pipeline_service_cache()
+    client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(app)
+    response = client.post(
+        "/api/pipeline/batches/20260830-jaeseong-001/stages/fixture_echo/runs"
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert "run_id" in payload
+    status = client.get("/api/pipeline/batches/20260830-jaeseong-001/status")
+    assert status.status_code == 200
+    body = status.json()
+    assert body["batch_id"] == "20260830-jaeseong-001"
+    get_settings.cache_clear()
+    clear_pipeline_service_cache()
+
+
+def test_platform_redirects_to_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.config import get_settings
+    from src.main import app
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("CONSOLE_ROLE", "OPERATOR")
+    client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(app)
+    response = client.get("/steps/platform", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/steps/pipeline"
+    get_settings.cache_clear()
+
+
+def test_validate_operator_batch_selection_rejects_disallowed_member() -> None:
+    validate_operator_batch_selection(
+        "20260811-woohee-001",
+        "woohee",
+        ("jaeseong", "sunyeong", "woohee"),
+    )
+    with pytest.raises(ValueError, match="운영자가 처리할 수 없는"):
+        validate_operator_batch_selection(
+            "20260811-woohee-001",
+            "woohee",
+            ("jaeseong", "sunyeong"),
+        )
+
+
+def test_summarize_operator_batches_filters_submitted(tmp_path: Path) -> None:
+    discovery = tmp_path / "datasets" / "discovery"
+    outcome = tmp_path / "outcome"
+    accepted = tmp_path / "datasets" / "inbox" / "accepted"
+    batch = "20260811-sunyeong-001"
+    discovery_dir = discovery / batch
+    discovery_dir.mkdir(parents=True)
+    (discovery_dir / "crawled_products.csv").write_text("id\n1\n", encoding="utf-8-sig")
+    (discovery_dir / "discovered_products.csv").write_text("id\n1\n", encoding="utf-8-sig")
+    (discovery_dir / "image_text_check.csv").write_text("id\n1\n", encoding="utf-8-sig")
+    outcome_dir = outcome / "sunyeong" / batch
+    outcome_dir.mkdir(parents=True)
+    (outcome_dir / "products.csv").write_text("id\n1\n", encoding="utf-8-sig")
+    accepted_dir = accepted / batch
+    accepted_dir.mkdir(parents=True)
+    (accepted_dir / "manifest.json").write_text("{}", encoding="utf-8")
+
+    unsubmitted = summarize_operator_batches(
+        datasets_root=tmp_path / "datasets",
+        outcome_root=outcome,
+        allowed_members=("jaeseong", "sunyeong", "woohee"),
+        include_submitted=False,
+    )
+    assert unsubmitted == []
+    submitted = summarize_operator_batches(
+        datasets_root=tmp_path / "datasets",
+        outcome_root=outcome,
+        allowed_members=("jaeseong", "sunyeong", "woohee"),
+        include_submitted=True,
+    )
+    assert len(submitted) == 1
+    assert submitted[0]["submission_status"] == "SUBMITTED"
+
+
+def test_console_role_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.config import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.delenv("CONSOLE_PLATFORM_MODE", raising=False)
+    monkeypatch.setenv("CONSOLE_ROLE", "OPERATOR")
+    monkeypatch.setenv("CONSOLE_OPERATOR", "jaeseong")
+    monkeypatch.setenv("ALLOWED_BATCH_MEMBERS", "jaeseong,sunyeong")
+    settings = get_settings()
+    assert settings.console_role == "OPERATOR"
+    assert settings.console_operator == "jaeseong"
+    assert settings.allowed_batch_members == ("jaeseong", "sunyeong")
+    assert settings.platform_mode is True
+    get_settings.cache_clear()
+
+
+def test_platform_mode_fallback_from_legacy_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.config import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.delenv("CONSOLE_ROLE", raising=False)
+    monkeypatch.setenv("CONSOLE_PLATFORM_MODE", "true")
+    settings = get_settings()
+    assert settings.console_role == "OPERATOR"
+    get_settings.cache_clear()
+
+
+def test_operator_routes_require_role(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.config import get_settings
+    from src.main import app
+
+    get_settings.cache_clear()
+    monkeypatch.delenv("CONSOLE_PLATFORM_MODE", raising=False)
+    monkeypatch.setenv("CONSOLE_ROLE", "COLLECTOR")
+    assert get_settings().console_role == "COLLECTOR"
+    client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(app)
+    assert client.get("/steps/team").status_code == 200
+    denied_page = client.get("/steps/submit", follow_redirects=False)
+    assert denied_page.status_code == 302
+    assert denied_page.headers["location"] == "/"
+    denied_job = client.post(
+        "/jobs/submit",
+        data={"batch_id": "20260811-jaeseong-001"},
+    )
+    assert denied_job.status_code == 403
+    assert "OPERATOR" in denied_job.text
+    get_settings.cache_clear()
+
+
+def test_operator_can_open_submit_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.config import get_settings
+    from src.main import app
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("CONSOLE_ROLE", "OPERATOR")
+    monkeypatch.setenv("ALLOWED_BATCH_MEMBERS", "jaeseong,sunyeong,woohee")
+    client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(app)
+    response = client.get("/steps/submit")
+    assert response.status_code == 200
+    assert "검증·제출" in response.text
+    get_settings.cache_clear()
+
+
+def test_pipeline_routes_require_operator_role(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from src.config import get_settings
     from src.main import app
 
     get_settings.cache_clear()
-    monkeypatch.setenv("CONSOLE_PLATFORM_MODE", "false")
-    assert get_settings().platform_mode is False
+    monkeypatch.delenv("CONSOLE_PLATFORM_MODE", raising=False)
+    monkeypatch.setenv("CONSOLE_ROLE", "COLLECTOR")
+    assert get_settings().console_role == "COLLECTOR"
     client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(app)
     assert client.get("/steps/team").status_code == 200
     home = client.get("/")
     assert home.status_code == 200
-    assert "5. 플랫폼" not in home.text
-    assert "플랫폼 · Dagster" not in home.text
-    denied = client.get("/steps/platform", follow_redirects=False)
+    assert "6. 파이프라인" not in home.text
+    denied = client.get("/steps/pipeline", follow_redirects=False)
     assert denied.status_code == 302
     assert denied.headers["location"] == "/"
     assert client.post(
         "/jobs/submit",
         data={"batch_id": "20260811-jaeseong-001"},
-    ).status_code == 200
-    assert "관리자 전용" in client.post(
-        "/jobs/submit",
-        data={"batch_id": "20260811-jaeseong-001"},
-    ).text
+    ).status_code == 403
+    get_settings.cache_clear()

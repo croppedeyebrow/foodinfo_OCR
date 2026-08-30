@@ -23,8 +23,6 @@ _STEP_PATTERNS: dict[str, re.Pattern[str]] = {
     ),
     "validate-submission": re.compile(r"^BATCH_DONE:", re.MULTILINE),
     "submit": re.compile(r"^BATCH_DONE:", re.MULTILINE),
-    "dagster-intake": re.compile(r"^BATCH_DONE:", re.MULTILINE),
-    "platform-pipeline": re.compile(r"^BATCH_DONE:", re.MULTILINE),
 }
 
 

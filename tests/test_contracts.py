@@ -148,6 +148,7 @@ def test_ensure_storage_dirs(normalizer_src, tmp_path: Path) -> None:
 
     paths = ensure_storage_dirs(tmp_path)
     assert (tmp_path / "inbox" / "accepted").is_dir()
+    assert (tmp_path / "bronze").is_dir()
     assert (tmp_path / "silver").is_dir()
     assert (tmp_path / "gold").is_dir()
     assert (tmp_path / "quarantine").is_dir()

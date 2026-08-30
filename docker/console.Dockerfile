@@ -19,9 +19,11 @@ RUN mkdir -p /usr/local/libexec/docker/cli-plugins \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
-COPY apps/console/requirements.txt /tmp/requirements.txt
+COPY apps/console/requirements.txt /tmp/console-requirements.txt
+COPY apps/normalizer/requirements.txt /tmp/normalizer-requirements.txt
 RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir -r /tmp/requirements.txt
+    && python -m pip install --no-cache-dir -r /tmp/console-requirements.txt \
+    && python -m pip install --no-cache-dir -r /tmp/normalizer-requirements.txt
 
 COPY apps/console/src /app/src
 

@@ -8,12 +8,17 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from .auth import is_operator, resolve_operator_batch
 from .config import get_settings
+from .pipeline_gateway import (
+    get_pipeline_service,
+    pipeline_error_response,
+    schedule_run_execution,
+)
 from .runner import (
     JobRunner,
     build_classify_images_command,
     build_collect_details_command,
-    build_dagster_intake_command,
     build_discover_category_command,
     build_discover_search_command,
     build_discover_urls_command,
@@ -25,6 +30,7 @@ from .summaries import (
     count_csv_rows,
     infer_batch_member,
     list_discovery_batches,
+    summarize_operator_batches,
     summarize_submission,
     summarize_team_batches,
     summarize_text_checks,
@@ -41,6 +47,10 @@ def _base_context(active_step: str) -> dict:
     settings = get_settings()
     return {
         "batch_member": settings.batch_member,
+        "console_role": settings.console_role,
+        "console_operator": settings.console_operator,
+        "allowed_batch_members": settings.allowed_batch_members,
+        "is_operator": is_operator(settings),
         "platform_mode": settings.platform_mode,
         "team_members": settings.team_members,
         "active_step": active_step,
@@ -48,24 +58,31 @@ def _base_context(active_step: str) -> dict:
     }
 
 
-def _platform_admin_redirect() -> RedirectResponse | None:
-    if not get_settings().platform_mode:
-        return RedirectResponse(url="/", status_code=302)
-    return None
+def _operator_redirect() -> RedirectResponse | None:
+    if is_operator():
+        return None
+    return RedirectResponse(url="/", status_code=302)
 
 
-def _submission_error(request: Request, message: str) -> HTMLResponse:
+def _submission_error(request: Request, message: str, *, status_code: int = 200) -> HTMLResponse:
     status = runner.status()
     status.error = message
     return templates.TemplateResponse(
-        request, "partials/job_status.html", {"status": status}
+        request,
+        "partials/job_status.html",
+        {"status": status},
+        status_code=status_code,
     )
 
 
-def _require_platform_admin_job(request: Request) -> HTMLResponse | None:
-    if get_settings().platform_mode:
+def _require_operator_job(request: Request) -> HTMLResponse | None:
+    if is_operator():
         return None
-    return _submission_error(request, "관리자 전용 기능입니다.")
+    return _submission_error(
+        request,
+        "OPERATOR 권한이 필요합니다.",
+        status_code=403,
+    )
 
 
 def _batch_owner(batch_id: str) -> str:
@@ -286,32 +303,191 @@ def step_team(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "step_team.html", context)
 
 
-@app.get("/steps/platform", response_model=None)
-def step_platform(
+@app.get("/steps/submit", response_model=None)
+def step_submit(
     request: Request,
+    member: str | None = None,
+    include_submitted: str | None = None,
 ) -> HTMLResponse | RedirectResponse:
-    redirect = _platform_admin_redirect()
+    redirect = _operator_redirect()
     if redirect is not None:
         return redirect
-    rows = _platform_batch_rows()
-    context = _base_context("platform")
+    settings = get_settings()
+    selected_member = (member or "").strip() or None
+    if selected_member and selected_member not in settings.allowed_batch_members:
+        raise HTTPException(status_code=400, detail="invalid member filter")
+    rows = summarize_operator_batches(
+        datasets_root=settings.datasets_root,
+        outcome_root=settings.outcome_root,
+        allowed_members=settings.allowed_batch_members,
+        member_filter=selected_member,
+        include_submitted=include_submitted == "1",
+    )
+    context = _base_context("submit")
     context.update(
         {
             "batch_rows": rows,
+            "selected_member": selected_member or "",
+            "include_submitted": include_submitted == "1",
             "empty_batches_hint": (
-                "OCR products.csv가 있는 팀 배치가 없습니다. "
+                "OCR products.csv가 있는 미제출 배치가 없습니다. "
                 "팀원이 3단계 OCR을 먼저 완료해야 합니다."
             ),
         }
     )
-    return templates.TemplateResponse(request, "step_platform.html", context)
+    return templates.TemplateResponse(request, "step_submit.html", context)
 
 
-@app.get("/steps/submit", response_class=RedirectResponse)
-def step_submit_redirect() -> RedirectResponse:
-    if not get_settings().platform_mode:
-        return RedirectResponse(url="/", status_code=302)
-    return RedirectResponse(url="/steps/platform", status_code=307)
+def _layer_manifest(data_root: Path, layer: str, batch_id: str) -> dict | None:
+    if layer == "bronze":
+        path = data_root / "bronze" / "kurly" / batch_id / "manifest.json"
+    elif layer == "silver":
+        path = data_root / "silver" / "kurly" / batch_id / "manifest.json"
+    else:
+        return None
+    if not path.is_file():
+        return None
+    import json
+
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _pipeline_stage_keys() -> list[dict[str, str]]:
+    service = get_pipeline_service()
+    hidden = {"fixture_echo"}
+    return [
+        item
+        for item in service.list_stage_keys()
+        if item["stage_key"] not in hidden
+    ]
+
+
+@app.get("/steps/pipeline", response_model=None)
+def step_pipeline(
+    request: Request,
+    batch_id: str | None = None,
+) -> HTMLResponse | RedirectResponse:
+    redirect = _operator_redirect()
+    if redirect is not None:
+        return redirect
+    settings = get_settings()
+    batches = _accepted_batch_rows()
+    selected = batch_id or (batches[0]["batch_id"] if batches else "")
+    status_payload = None
+    stages: list[dict[str, str]] = []
+    bronze_summary = None
+    silver_summary = None
+    if selected:
+        try:
+            resolve_operator_batch(selected, settings=settings)
+            service = get_pipeline_service()
+            status_payload = service.get_batch_status(selected)
+            stages = _pipeline_stage_keys()
+            if not stages:
+                raise RuntimeError(
+                    "등록된 Pipeline Stage가 없습니다. console 이미지를 재빌드했는지 확인하세요."
+                )
+            bronze_summary = _layer_manifest(settings.datasets_root, "bronze", selected)
+            silver_summary = _layer_manifest(settings.datasets_root, "silver", selected)
+        except Exception as error:
+            status_payload = {"error": str(error)}
+    context = _base_context("pipeline")
+    context.update(
+        {
+            "accepted_batches": batches,
+            "selected_batch": selected,
+            "pipeline_status": status_payload,
+            "pipeline_stages": stages,
+            "bronze_summary": bronze_summary,
+            "silver_summary": silver_summary,
+            "empty_batches_hint": (
+                "accepted 제출된 배치가 없습니다. "
+                "5단계 검증·제출을 먼저 완료하세요."
+            ),
+        }
+    )
+    return templates.TemplateResponse(request, "step_pipeline.html", context)
+
+
+@app.get("/steps/platform", response_class=RedirectResponse, include_in_schema=False)
+def step_platform_redirect() -> RedirectResponse:
+    if is_operator():
+        return RedirectResponse(url="/steps/pipeline", status_code=307)
+    return RedirectResponse(url="/", status_code=302)
+
+
+@app.get("/steps/pipeline/partials/status/{batch_id}", response_class=HTMLResponse)
+def pipeline_status_partial(request: Request, batch_id: str) -> HTMLResponse:
+    redirect = _operator_redirect()
+    if redirect is not None:
+        return HTMLResponse("권한 없음", status_code=403)
+    try:
+        resolve_operator_batch(batch_id)
+    except ValueError as error:
+        return HTMLResponse(str(error), status_code=400)
+    service = get_pipeline_service()
+    pipeline_status = service.get_batch_status(batch_id)
+    return templates.TemplateResponse(
+        request,
+        "partials/pipeline_status.html",
+        {"pipeline_status": pipeline_status},
+    )
+
+
+@app.get("/steps/pipeline/evidence/{batch_id}", response_model=None)
+def step_pipeline_evidence(
+    request: Request, batch_id: str
+) -> HTMLResponse | RedirectResponse:
+    redirect = _operator_redirect()
+    if redirect is not None:
+        return redirect
+    try:
+        resolve_operator_batch(batch_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    settings = get_settings()
+    evidence_path = (
+        settings.datasets_root / "silver" / "kurly" / batch_id / "evidence.jsonl"
+    )
+    if not evidence_path.is_file():
+        raise HTTPException(status_code=404, detail="silver evidence not found")
+    import json
+
+    rows = [
+        json.loads(line)
+        for line in evidence_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    context = _base_context("pipeline")
+    context.update({"batch_id": batch_id, "evidence_rows": rows})
+    return templates.TemplateResponse(request, "step_pipeline_evidence.html", context)
+
+
+@app.get("/api/pipeline/batches/{batch_id}/silver/review.csv")
+def api_pipeline_silver_review_csv(batch_id: str) -> FileResponse:
+    _require_operator_api()
+    try:
+        resolve_operator_batch(batch_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    settings = get_settings()
+    review_path = (
+        settings.datasets_root / "silver" / "kurly" / batch_id / "review.csv"
+    )
+    if not review_path.is_file():
+        raise HTTPException(status_code=404, detail="silver review.csv not found")
+    return FileResponse(
+        review_path,
+        media_type="text/csv",
+        filename=f"{batch_id}-review.csv",
+    )
+
+
+@app.get("/steps/submit-legacy", response_class=RedirectResponse, include_in_schema=False)
+def step_submit_legacy_redirect() -> RedirectResponse:
+    if is_operator():
+        return RedirectResponse(url="/steps/submit", status_code=307)
+    return RedirectResponse(url="/", status_code=302)
 
 
 @app.get("/batches")
@@ -388,27 +564,92 @@ def _parse_batch_ids(batch_ids: list[str] | None) -> list[str]:
     return ordered
 
 
-def _resolve_batch_owners(batch_ids: list[str]) -> list[tuple[str, str]]:
+def _resolve_operator_batches(batch_ids: list[str]) -> list[tuple[str, str]]:
     resolved: list[tuple[str, str]] = []
     for batch_id in batch_ids:
-        member = _batch_owner(batch_id)
-        validate_batch_selection(batch_id, member)
-        resolved.append((batch_id, member))
+        resolved.append(resolve_operator_batch(batch_id))
     return resolved
 
 
-def _platform_batch_rows() -> list[dict]:
+def _accepted_batch_rows() -> list[dict]:
     settings = get_settings()
     rows = summarize_team_batches(
         datasets_root=settings.datasets_root,
         outcome_root=settings.outcome_root,
-        team_members=settings.team_members,
+        team_members=settings.allowed_batch_members,
     )
-    return [
-        row
-        for row in rows
-        if row["products"] > 0
-    ]
+    return [row for row in rows if row["accepted"]]
+
+
+def _require_operator_api() -> None:
+    if not is_operator():
+        raise HTTPException(status_code=403, detail="OPERATOR role required")
+
+
+@app.post("/api/pipeline/batches/{batch_id}/stages/{stage_key}/runs")
+def api_pipeline_start_run(batch_id: str, stage_key: str) -> dict:
+    _require_operator_api()
+    try:
+        _batch_id, member = resolve_operator_batch(batch_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    try:
+        service = get_pipeline_service()
+        snapshot = service.start_run(
+            batch_id=_batch_id,
+            member=member,
+            stage_key=stage_key,
+        )
+        schedule_run_execution(run_id=str(snapshot["run_id"]), member=member)
+        return snapshot
+    except Exception as error:
+        status_code, payload = pipeline_error_response(error)
+        raise HTTPException(status_code=status_code, detail=payload) from error
+
+
+@app.get("/api/pipeline/runs/{run_id}")
+def api_pipeline_get_run(run_id: str) -> dict:
+    _require_operator_api()
+    service = get_pipeline_service()
+    snapshot = service.get_run(run_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    return snapshot
+
+
+@app.get("/api/pipeline/batches/{batch_id}/status")
+def api_pipeline_batch_status(batch_id: str) -> dict:
+    _require_operator_api()
+    try:
+        resolve_operator_batch(batch_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    service = get_pipeline_service()
+    return service.get_batch_status(batch_id)
+
+
+@app.post("/api/pipeline/runs/{run_id}/retry")
+def api_pipeline_retry_run(run_id: str) -> dict:
+    _require_operator_api()
+    service = get_pipeline_service()
+    snapshot = service.get_run(run_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    batch_id = str(snapshot.get("batch_id") or "")
+    try:
+        _batch_id, member = resolve_operator_batch(batch_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    try:
+        new_snapshot = service.retry_run(run_id, member=member)
+        schedule_run_execution(
+            run_id=str(new_snapshot["run_id"]),
+            member=member,
+        )
+        return new_snapshot
+    except Exception as error:
+        status_code, payload = pipeline_error_response(error)
+        raise HTTPException(status_code=status_code, detail=payload) from error
 
 
 @app.post("/jobs/discover", response_class=HTMLResponse)
@@ -561,14 +802,14 @@ def job_validate_submission(
     batch_ids: list[str] = Form(default=[]),
     batch_id: str = Form(""),
 ) -> HTMLResponse:
-    denied = _require_platform_admin_job(request)
+    denied = _require_operator_job(request)
     if denied is not None:
         return denied
     selected = _parse_batch_ids([*batch_ids, batch_id] if batch_id else batch_ids)
     if not selected:
         return _submission_error(request, "배치를 하나 이상 선택하세요.")
     try:
-        owners = _resolve_batch_owners(selected)
+        owners = _resolve_operator_batches(selected)
     except ValueError as error:
         return _submission_error(request, str(error))
     commands = [
@@ -591,18 +832,19 @@ def job_submit(
     batch_ids: list[str] = Form(default=[]),
     batch_id: str = Form(""),
 ) -> HTMLResponse:
-    denied = _require_platform_admin_job(request)
+    denied = _require_operator_job(request)
     if denied is not None:
         return denied
     selected = _parse_batch_ids([*batch_ids, batch_id] if batch_id else batch_ids)
     if not selected:
         return _submission_error(request, "배치를 하나 이상 선택하세요.")
     try:
-        owners = _resolve_batch_owners(selected)
+        owners = _resolve_operator_batches(selected)
     except ValueError as error:
         return _submission_error(request, str(error))
+    operator = get_settings().console_operator
     commands = [
-        build_submit_collection_command(batch, member)
+        build_submit_collection_command(batch, member, submitted_by=operator)
         for batch, member in owners
     ]
     labels = [batch for batch, _member in owners]
@@ -615,91 +857,13 @@ def job_submit(
     )
 
 
-@app.post("/jobs/dagster-intake", response_class=HTMLResponse)
-def job_dagster_intake(
-    request: Request,
-    batch_ids: list[str] = Form(default=[]),
-    batch_id: str = Form(""),
-) -> HTMLResponse:
-    denied = _require_platform_admin_job(request)
-    if denied is not None:
-        return denied
-    selected = _parse_batch_ids([*batch_ids, batch_id] if batch_id else batch_ids)
-    if not selected:
-        return _submission_error(request, "배치를 하나 이상 선택하세요.")
-    try:
-        owners = _resolve_batch_owners(selected)
-    except ValueError as error:
-        return _submission_error(request, str(error))
-    settings = get_settings()
-    missing = [
-        batch
-        for batch, _member in owners
-        if not (
-            settings.datasets_root
-            / "inbox"
-            / "accepted"
-            / batch
-            / "manifest.json"
-        ).is_file()
-    ]
-    if missing:
-        return _submission_error(
-            request,
-            "accepted manifest가 없는 배치: " + ", ".join(missing),
-        )
-    commands = [build_dagster_intake_command(batch) for batch, _member in owners]
-    labels = [batch for batch, _member in owners]
-    return _start_queue_or_error(
-        request,
-        "dagster-intake",
-        commands,
-        labels=labels,
-        stop_on_error=False,
-    )
-
-
-@app.post("/jobs/platform-pipeline", response_class=HTMLResponse)
-def job_platform_pipeline(
-    request: Request,
-    batch_ids: list[str] = Form(default=[]),
-) -> HTMLResponse:
-    denied = _require_platform_admin_job(request)
-    if denied is not None:
-        return denied
-    selected = _parse_batch_ids(batch_ids)
-    if not selected:
-        return _submission_error(request, "배치를 하나 이상 선택하세요.")
-    try:
-        owners = _resolve_batch_owners(selected)
-    except ValueError as error:
-        return _submission_error(request, str(error))
-    commands: list[list[str]] = []
-    labels: list[str] = []
-    for batch, member in owners:
-        commands.append(build_validate_collection_command(batch, member))
-        labels.append(f"{batch}/validate")
-        commands.append(build_submit_collection_command(batch, member))
-        labels.append(f"{batch}/submit")
-        commands.append(build_dagster_intake_command(batch))
-        labels.append(f"{batch}/dagster")
-    return _start_queue_or_error(
-        request,
-        "platform-pipeline",
-        commands,
-        labels=labels,
-        stop_on_error=True,
-    )
-
-
 @app.get("/submissions/{batch_id}/validation-report", response_model=None)
 def download_validation_report(batch_id: str) -> FileResponse | RedirectResponse:
-    redirect = _platform_admin_redirect()
+    redirect = _operator_redirect()
     if redirect is not None:
         return redirect
     try:
-        member = _batch_owner(batch_id)
-        validate_batch_selection(batch_id, member)
+        _batch_id, member = resolve_operator_batch(batch_id)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     path = get_settings().outcome_batch_dir(batch_id, member) / "validation_report.json"

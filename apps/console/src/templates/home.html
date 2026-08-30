@@ -5,8 +5,8 @@
   <h1>단계별 실행</h1>
   <p class="lead">
     CMD 대신 화면에서 파라미터를 확인하고 1 → 2 → 2.5 → 3 → 4 순서로 실행합니다.
-    {% if platform_mode %}
-    관리자 메뉴에서 accepted 제출과 Dagster intake를 실행할 수 있습니다.
+    {% if is_operator %}
+    운영자 메뉴에서 팀 배치 검증·제출과 Pipeline Stage 실행을 할 수 있습니다.
     {% endif %}
   </p>
   <ol>
@@ -15,8 +15,9 @@
     <li><a href="/steps/classify">이미지 텍스트 판별</a> — image_text_check.csv</li>
     <li><a href="/steps/ocr">OCR · 최종 CSV</a> — outcome/{{ batch_member }}/</li>
     <li><a href="/steps/team">팀 크롤 결과</a> — 전체 팀원 배치 목록</li>
-    {% if platform_mode %}
-    <li><a href="/steps/platform">플랫폼 · Dagster</a> — 검증·제출·intake (관리자)</li>
+    {% if is_operator %}
+    <li><a href="/steps/submit">검증·제출</a> — 팀 배치 accepted inbox (운영자)</li>
+    <li><a href="/steps/pipeline">파이프라인</a> — Stage 실행·상태 조회 (운영자)</li>
     {% endif %}
   </ol>
 </section>

@@ -47,6 +47,31 @@ def _team_members() -> tuple[str, ...]:
     return members or ("jaeseong", "sunyeong", "woohee")
 
 
+def _parse_member_list(raw: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in raw.split(",") if item.strip())
+
+
+def _console_role() -> str:
+    raw = os.getenv("CONSOLE_ROLE", "").strip().upper()
+    if raw in {"COLLECTOR", "OPERATOR"}:
+        return raw
+    if _env_flag("CONSOLE_PLATFORM_MODE"):
+        return "OPERATOR"
+    return "COLLECTOR"
+
+
+def _allowed_batch_members(team_members: tuple[str, ...]) -> tuple[str, ...]:
+    raw = os.getenv("ALLOWED_BATCH_MEMBERS", "").strip()
+    if raw:
+        members = _parse_member_list(raw)
+        return members or team_members
+    return team_members
+
+
+def _console_operator(batch_member: str) -> str:
+    return os.getenv("CONSOLE_OPERATOR", batch_member).strip() or batch_member
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> "Settings":
     project_root = _find_project_root()
@@ -59,13 +84,19 @@ def get_settings() -> "Settings":
     # Inside OCR containers OUTCOME_ROOT=/outcome; console on host/workspace uses ./outcome
     if outcome_root == Path("/outcome") and not outcome_root.exists():
         outcome_root = project_root / "outcome"
+    batch_member = os.getenv("BATCH_MEMBER", "unknown")
+    team_members = _team_members()
+    console_role = _console_role()
     return Settings(
         project_root=project_root,
-        batch_member=os.getenv("BATCH_MEMBER", "unknown"),
+        batch_member=batch_member,
         datasets_root=datasets_root,
         outcome_root=outcome_root,
-        platform_mode=_env_flag("CONSOLE_PLATFORM_MODE"),
-        team_members=_team_members(),
+        console_role=console_role,
+        console_operator=_console_operator(batch_member),
+        allowed_batch_members=_allowed_batch_members(team_members),
+        platform_mode=console_role == "OPERATOR",
+        team_members=team_members,
     )
 
 
@@ -77,6 +108,9 @@ class Settings:
         batch_member: str,
         datasets_root: Path,
         outcome_root: Path,
+        console_role: str,
+        console_operator: str,
+        allowed_batch_members: tuple[str, ...],
         platform_mode: bool,
         team_members: tuple[str, ...],
     ) -> None:
@@ -84,6 +118,9 @@ class Settings:
         self.batch_member = batch_member
         self.datasets_root = datasets_root
         self.outcome_root = outcome_root
+        self.console_role = console_role
+        self.console_operator = console_operator
+        self.allowed_batch_members = allowed_batch_members
         self.platform_mode = platform_mode
         self.team_members = team_members
         self.discovery_root = datasets_root / "discovery"

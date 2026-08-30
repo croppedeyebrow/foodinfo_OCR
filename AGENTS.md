@@ -4,18 +4,20 @@
 
 Before changing data-platform code, read in order:
 
-1. `dev_order/README.md`
-2. `dev_order/data_platform/00_execution_rules.md`
-3. The one stage marked `READY` or `IN_PROGRESS`
-4. Reference documents under `dev_docs/data_platform`
+1. [`dev_order_docs/README.md`](dev_order_docs/README.md)
+2. [`dev_order_docs/00_execution_rules.md`](dev_order_docs/00_execution_rules.md)
+3. The one stage marked `READY` or `IN_PROGRESS` in `dev_order_docs/README.md`
+4. Completed stage notes under [`dev_history/`](dev_history/README.md)
 5. Existing contracts and tests for the affected producer and consumer
+
+Legacy folders `dev_order/` and `dev_docs/data_platform/` are archived; do not execute them as current instructions.
 
 ## Architecture constraints
 
 - Python 3.12 is the primary implementation language.
 - Use Polars expressions and Parquet for structured batch transformations.
-- Dagster orchestrates existing application entrypoints; business rules do not live in Dagster definitions.
-- Rust is optional and may only be introduced through `dev_order/data_platform/09_rust_benchmark_gate.md`.
+- Console `PipelineService` and Stage services run pipeline steps; Dagster is legacy until stage 11 removal.
+- Rust is optional and may only be introduced through `dev_order_docs/09_rust_benchmark_gate.md`.
 - Do not introduce Go, Spark, Kafka, Airflow, or Kubernetes without a new approved ADR.
 - Preserve `apps/console`, `apps/crawler`, `apps/ocr-parser`, and their existing CLI behavior.
 - Team members use only collection and OCR features in Console.
@@ -45,7 +47,7 @@ Before changing data-platform code, read in order:
 - Integration tests with local fixture data
 - Existing crawler/OCR non-integration tests
 - Format, lint, and type checks configured by the repository
-- A completion report following `dev_order/data_platform/00_execution_rules.md`
+- A completion report following `dev_order_docs/00_execution_rules.md`
 
 ## Archive rule
 

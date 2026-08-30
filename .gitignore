@@ -21,7 +21,12 @@ datasets/silver/*
 datasets/gold/*
 datasets/quarantine/*
 datasets/warehouse/*
+datasets/pipeline/*
+datasets/bronze/*
 datasets/input/crawled_products.csv
+
+outcome/**/validation_report.json
+outcome/**/submission_audit.json
 
 !datasets/images/.gitkeep
 !datasets/html/.gitkeep

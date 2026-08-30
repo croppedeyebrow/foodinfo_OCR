@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}5. 검증·제출 · Pipeline Console{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>5단계 · 팀 배치 검증·제출 (운영자)</h1>
+  <p class="lead">
+    Git으로 받은 팀원 배치를 검증하고 accepted inbox로 제출합니다.
+    운영자 <strong>{{ console_operator }}</strong> ·
+    허용 생산자 {{ allowed_batch_members|join(", ") }}
+  </p>
+
+  <form method="get" action="/steps/submit" class="actions" style="margin-bottom:1rem;">
+    <label>
+      생산자
+      <select name="member" onchange="this.form.submit()">
+        <option value="" {% if not selected_member %}selected{% endif %}>전체</option>
+        {% for member in allowed_batch_members %}
+        <option value="{{ member }}" {% if selected_member == member %}selected{% endif %}>
+          {{ member }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label style="margin-left:0.75rem;">
+      <input type="checkbox" name="include_submitted" value="1" {% if include_submitted %}checked{% endif %}
+        onchange="this.form.submit()">
+      제출 완료 포함
+    </label>
+  </form>
+
+  {% if not batch_rows %}
+  <p class="hint">{{ empty_batches_hint }}</p>
+  {% else %}
+  <div class="actions" style="margin-bottom:0.75rem;">
+    <button type="button" id="select-all" class="btn">전체 선택</button>
+    <button type="button" id="select-none" class="btn" style="background:#5c6770;">선택 해제</button>
+    <span class="lead" id="selected-count" style="margin:0;">0개 선택</span>
+  </div>
+
+  <table style="width:100%; border-collapse:collapse; font-size:0.92rem; margin-bottom:1rem;">
+    <thead>
+      <tr style="text-align:left; border-bottom:1px solid var(--line);">
+        <th style="padding:0.5rem 0.35rem; width:2.5rem;"></th>
+        <th style="padding:0.5rem 0.35rem;">생산자</th>
+        <th style="padding:0.5rem 0.35rem;">검색어/출처</th>
+        <th style="padding:0.5rem 0.35rem;">배치 ID</th>
+        <th style="padding:0.5rem 0.35rem;">OCR</th>
+        <th style="padding:0.5rem 0.35rem;">상태</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in batch_rows %}
+      <tr style="border-bottom:1px solid var(--line);">
+        <td style="padding:0.55rem 0.35rem;">
+          <input
+            type="checkbox"
+            class="batch-check"
+            name="batch_ids"
+            value="{{ row.batch_id }}"
+            form="submit-actions"
+          >
+        </td>
+        <td style="padding:0.55rem 0.35rem;">{{ row.member }}</td>
+        <td style="padding:0.55rem 0.35rem;">{{ row.source_label }}</td>
+        <td style="padding:0.55rem 0.35rem;"><code>{{ row.batch_id }}</code></td>
+        <td style="padding:0.55rem 0.35rem;">{{ row.products }}</td>
+        <td style="padding:0.55rem 0.35rem;">
+          <span class="status-pill {% if row.submission_status == 'SUBMITTED' %}accepted{% elif row.submission_status == 'VALIDATED' %}succeeded{% elif row.submission_status == 'FAILED' %}failed{% else %}running{% endif %}">
+            {{ row.submission_status_label }}
+          </span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <form id="submit-actions" class="actions">
+    <button
+      type="submit"
+      formaction="/jobs/validate-submission"
+      formmethod="post"
+      hx-post="/jobs/validate-submission"
+      hx-target="#job-panel"
+      hx-swap="innerHTML"
+      hx-disabled-elt="button[type=submit]"
+    >계약 검증</button>
+    <button
+      type="submit"
+      formaction="/jobs/submit"
+      formmethod="post"
+      hx-post="/jobs/submit"
+      hx-target="#job-panel"
+      hx-swap="innerHTML"
+      hx-disabled-elt="button[type=submit]"
+      style="background:#0a4d38;"
+    >accepted 제출</button>
+  </form>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h1>실행 상태 · 로그</h1>
+  <div
+    id="job-panel"
+    hx-get="/jobs/status"
+    hx-trigger="load, every 2s"
+    hx-swap="innerHTML"
+  >
+    {% include "partials/job_status.html" %}
+  </div>
+</section>
+
+<script>
+(function () {
+  const checks = () => Array.from(document.querySelectorAll(".batch-check"));
+  const countEl = document.getElementById("selected-count");
+  function refreshCount() {
+    if (!countEl) return;
+    const n = checks().filter((el) => el.checked).length;
+    countEl.textContent = n + "개 선택";
+  }
+  const allBtn = document.getElementById("select-all");
+  const noneBtn = document.getElementById("select-none");
+  if (allBtn) {
+    allBtn.addEventListener("click", () => {
+      checks().forEach((el) => { el.checked = true; });
+      refreshCount();
+    });
+  }
+  if (noneBtn) {
+    noneBtn.addEventListener("click", () => {
+      checks().forEach((el) => { el.checked = false; });
+      refreshCount();
+    });
+  }
+  checks().forEach((el) => el.addEventListener("change", refreshCount));
+  refreshCount();
+})();
+</script>
+{% endblock %}

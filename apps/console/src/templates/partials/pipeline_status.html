@@ -1,0 +1,74 @@
+{% if pipeline_status and pipeline_status.stages %}
+<table style="width:100%; border-collapse:collapse; font-size:0.92rem; margin-top:0.5rem;">
+  <thead>
+    <tr style="text-align:left; border-bottom:1px solid var(--line);">
+      <th style="padding:0.5rem 0.35rem;">Stage</th>
+      <th style="padding:0.5rem 0.35rem;">상태</th>
+      <th style="padding:0.5rem 0.35rem;">run ID</th>
+      <th style="padding:0.5rem 0.35rem;">진행</th>
+      <th style="padding:0.5rem 0.35rem;"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for stage in pipeline_status.stages %}
+    <tr style="border-bottom:1px solid var(--line);">
+      <td style="padding:0.55rem 0.35rem;">{{ stage.display_name }}</td>
+      <td style="padding:0.55rem 0.35rem;">
+        <span class="status-pill {% if stage.status == 'SUCCEEDED' %}accepted{% elif stage.status == 'FAILED' %}failed{% elif stage.status == 'RUNNING' %}running{% else %}ready{% endif %}">
+          {{ stage.status }}
+        </span>
+      </td>
+      <td style="padding:0.55rem 0.35rem;"><code>{{ stage.latest_run_id or '-' }}</code></td>
+      <td style="padding:0.55rem 0.35rem;">
+        {% if stage.latest_run and stage.latest_run.progress %}
+        in={{ stage.latest_run.progress.input_count }}
+        out={{ stage.latest_run.progress.output_count }}
+        fail={{ stage.latest_run.progress.failed_count }}
+        {% else %}-{% endif %}
+      </td>
+      <td style="padding:0.55rem 0.35rem;">
+        {% if stage.latest_run_id and stage.status == 'FAILED' %}
+        <button
+          type="button"
+          class="btn pipeline-retry-btn"
+          data-run-id="{{ stage.latest_run_id }}"
+        >재실행</button>
+        {% endif %}
+      </td>
+    </tr>
+    {% if stage.latest_run and stage.latest_run.progress and stage.latest_run.progress.error_message %}
+    <tr>
+      <td colspan="5" class="error" style="padding:0.35rem;">{{ stage.latest_run.progress.error_message }}</td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+<script>
+(function () {
+  document.querySelectorAll(".pipeline-retry-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const runId = button.dataset.runId;
+      if (!runId) return;
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/pipeline/runs/${encodeURIComponent(runId)}/retry`, {
+          method: "POST",
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          alert(payload.detail?.message || JSON.stringify(payload.detail || payload));
+          return;
+        }
+        const panel = document.getElementById("pipeline-status-panel");
+        if (panel) htmx.trigger(panel, "load");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+})();
+</script>
+{% else %}
+<p class="hint">Stage 상태를 불러오는 중입니다.</p>
+{% endif %}

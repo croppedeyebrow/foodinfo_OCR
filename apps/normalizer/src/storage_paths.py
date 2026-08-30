@@ -11,6 +11,7 @@ LAYER_DIRS = (
     "detail_images",
     "ocr_raw",
     "inbox/accepted",
+    "bronze",
     "silver",
     "gold",
     "quarantine",
@@ -34,12 +35,20 @@ def accepted_inbox_dir(data_root: Path, batch_id: str) -> Path:
     return data_root / "inbox" / "accepted" / batch_id
 
 
+def bronze_batch_dir(data_root: Path, source: str, batch_id: str) -> Path:
+    return data_root / "bronze" / source / batch_id
+
+
 def silver_batch_dir(data_root: Path, source: str, batch_id: str) -> Path:
     return data_root / "silver" / source / batch_id
 
 
 def gold_dataset_dir(data_root: Path, dataset: str, version: str) -> Path:
     return data_root / "gold" / dataset / version
+
+
+def quarantine_run_dir(data_root: Path, run_id: str) -> Path:
+    return data_root / "quarantine" / run_id
 
 
 def quarantine_batch_dir(data_root: Path, batch_id: str) -> Path:

@@ -47,3 +47,19 @@ def use_app(app_name: str) -> Path:
     ]
     sys.path[:] = [str(app_root), *cleaned]
     return app_root
+
+
+def use_console() -> Path:
+    """Console 테스트 모듈의 src 패키지를 다시 활성화한다."""
+    console_root = Path(__file__).resolve().parent.parent / "apps" / "console"
+    _clear_src_modules()
+    cleaned = [
+        path
+        for path in sys.path
+        if "apps/crawler" not in path.replace("\\", "/")
+        and "apps/ocr-parser" not in path.replace("\\", "/")
+        and "apps/console" not in path.replace("\\", "/")
+        and "apps/normalizer" not in path.replace("\\", "/")
+    ]
+    sys.path[:] = [str(console_root), *cleaned]
+    return console_root
