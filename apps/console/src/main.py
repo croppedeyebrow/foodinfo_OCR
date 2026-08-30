@@ -12,7 +12,9 @@ from .auth import is_operator, resolve_operator_batch, resolve_operator_dataset,
 from .config import get_settings
 from .pipeline_gateway import (
     append_reconciliation_decision,
+    build_results_summary,
     get_pipeline_service,
+    load_lineage_for_gold_record,
     is_reference_dataset_conflict,
     pipeline_error_response,
     register_reference_dataset,
@@ -402,7 +404,7 @@ def _kfia_layer_manifest(data_root: Path, layer: str, dataset_version: str) -> d
 
 
 def _resolve_pipeline_scope(batch_id: str, stage_key: str) -> tuple[str, str]:
-    if stage_key == "kurly_kfia_reconcile":
+    if stage_key == "kurly_kfia_reconcile" or stage_key == "gold_freshness_publish":
         return resolve_reconcile_pair(batch_id)
     if stage_key.startswith("kfia_"):
         return resolve_operator_dataset(batch_id)
@@ -437,6 +439,32 @@ def _reconciled_manifest(data_root: Path, pair_id: str) -> dict | None:
 def _reconcile_stage_keys() -> list[dict[str, str]]:
     service = get_pipeline_service()
     return service.list_stage_keys(stage_key_prefix="kurly_kfia_")
+
+
+def _reconciled_pair_ids() -> list[str]:
+    settings = get_settings()
+    root = settings.datasets_root / "reconciled"
+    if not root.is_dir():
+        return []
+    pairs: list[str] = []
+    for child in sorted(root.iterdir()):
+        if child.is_dir() and (child / "manifest.json").is_file():
+            pairs.append(child.name)
+    return pairs
+
+
+def _gold_stage_keys() -> list[dict[str, str]]:
+    service = get_pipeline_service()
+    return service.list_stage_keys(stage_key_prefix="gold_")
+
+
+def _gold_manifest(data_root: Path, pair_id: str) -> dict | None:
+    path = data_root / "gold" / "freshness_profiles" / pair_id / "manifest.json"
+    if not path.is_file():
+        return None
+    import json
+
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 @app.get("/steps/reference", response_model=None)
@@ -636,6 +664,174 @@ async def api_reconciliation_decision(request: Request) -> dict:
         status_code, payload = pipeline_error_response(error)
         raise HTTPException(status_code=status_code, detail=payload) from error
     return {"decision": decision, "path": path.as_posix()}
+
+
+@app.get("/steps/results", response_model=None)
+def step_results(
+    request: Request,
+    pair_id: str | None = None,
+    kurly_batch_id: str | None = None,
+    kfia_dataset_version: str | None = None,
+) -> HTMLResponse | RedirectResponse:
+    redirect = _operator_redirect()
+    if redirect is not None:
+        return redirect
+    settings = get_settings()
+    reconciled_pairs = _reconciled_pair_ids()
+    if pair_id:
+        selected_pair = pair_id
+    elif kurly_batch_id and kfia_dataset_version:
+        selected_pair = _reconcile_pair_id(kurly_batch_id, kfia_dataset_version)
+    else:
+        selected_pair = reconciled_pairs[-1] if reconciled_pairs else ""
+
+    status_payload = None
+    results_summary = None
+    gold_summary = None
+    gold_stages: list[dict[str, str]] = []
+    gold_records: list[dict] = []
+
+    if selected_pair:
+        try:
+            resolve_reconcile_pair(selected_pair, settings=settings)
+            service = get_pipeline_service()
+            status_payload = service.get_batch_status(
+                selected_pair, stage_key_prefix="gold_"
+            )
+            gold_stages = _gold_stage_keys()
+            results_summary = build_results_summary(
+                data_root=settings.datasets_root,
+                pair_id=selected_pair,
+            )
+            gold_summary = _gold_manifest(settings.datasets_root, selected_pair)
+            gold_parquet = (
+                settings.datasets_root
+                / "gold"
+                / "freshness_profiles"
+                / selected_pair
+                / "freshness_profiles.parquet"
+            )
+            if gold_parquet.is_file():
+                import polars as pl
+
+                gold_records = pl.read_parquet(gold_parquet).select(
+                    [
+                        "record_id",
+                        "external_product_id",
+                        "product_name",
+                        "food_mapping_key",
+                        "storage_type",
+                        "selected_source",
+                        "confidence",
+                    ]
+                ).to_dicts()
+        except Exception as error:
+            status_payload = {"error": str(error)}
+
+    context = _base_context("results")
+    context.update(
+        {
+            "reconciled_pairs": reconciled_pairs,
+            "selected_pair": selected_pair,
+            "results_summary": results_summary,
+            "gold_summary": gold_summary,
+            "gold_status": status_payload,
+            "gold_stages": gold_stages,
+            "gold_records": gold_records,
+        }
+    )
+    return templates.TemplateResponse(request, "step_results.html", context)
+
+
+@app.get("/steps/results/partials/status/{pair_id:path}", response_class=HTMLResponse)
+def results_status_partial(request: Request, pair_id: str) -> HTMLResponse:
+    redirect = _operator_redirect()
+    if redirect is not None:
+        return HTMLResponse("권한 없음", status_code=403)
+    try:
+        resolve_reconcile_pair(pair_id)
+    except ValueError as error:
+        return HTMLResponse(str(error), status_code=400)
+    service = get_pipeline_service()
+    gold_status = service.get_batch_status(pair_id, stage_key_prefix="gold_")
+    return templates.TemplateResponse(
+        request,
+        "partials/pipeline_status.html",
+        {"pipeline_status": gold_status},
+    )
+
+
+@app.get("/api/results/pairs/{pair_id:path}/summary")
+def api_results_summary(pair_id: str) -> dict:
+    _require_operator_api()
+    try:
+        resolve_reconcile_pair(pair_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    settings = get_settings()
+    return build_results_summary(data_root=settings.datasets_root, pair_id=pair_id)
+
+
+@app.get("/api/results/pairs/{pair_id:path}/lineage/{gold_record_id}")
+def api_results_lineage(pair_id: str, gold_record_id: str) -> dict:
+    _require_operator_api()
+    try:
+        resolve_reconcile_pair(pair_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    settings = get_settings()
+    lineage = load_lineage_for_gold_record(
+        data_root=settings.datasets_root,
+        pair_id=pair_id,
+        gold_record_id=gold_record_id,
+    )
+    if lineage is None:
+        raise HTTPException(status_code=404, detail="lineage not found")
+    return lineage
+
+
+@app.get("/api/results/pairs/{pair_id:path}/freshness_profiles.csv")
+def api_results_freshness_csv(pair_id: str) -> FileResponse:
+    _require_operator_api()
+    try:
+        resolve_reconcile_pair(pair_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    settings = get_settings()
+    csv_path = (
+        settings.datasets_root
+        / "gold"
+        / "freshness_profiles"
+        / pair_id
+        / "freshness_profiles.csv"
+    )
+    if not csv_path.is_file():
+        raise HTTPException(status_code=404, detail="freshness_profiles.csv not found")
+    return FileResponse(
+        csv_path,
+        media_type="text/csv",
+        filename=f"gold_{pair_id.replace('__', '_')}_freshness_profiles.csv",
+    )
+
+
+@app.get("/api/results/pairs/{pair_id:path}/manifest.json")
+def api_results_manifest(pair_id: str) -> FileResponse:
+    _require_operator_api()
+    try:
+        resolve_reconcile_pair(pair_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    settings = get_settings()
+    manifest_path = (
+        settings.datasets_root
+        / "gold"
+        / "freshness_profiles"
+        / pair_id
+        / "manifest.json"
+    )
+    if not manifest_path.is_file():
+        raise HTTPException(status_code=404, detail="manifest.json not found")
+    return FileResponse(manifest_path, media_type="application/json")
 
 
 @app.get("/steps/pipeline", response_model=None)

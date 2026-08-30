@@ -1,4 +1,5 @@
 from .base import StageContext, StageExecutionResult, StageService
+from .gold_freshness_publish import GoldFreshnessPublishStage
 from .kfia_reference_bronze import KfiaReferenceBronzeStage
 from .kfia_reference_silver import KfiaReferenceSilverStage
 from .kurly_bronze import KurlyBronzeStage
@@ -11,9 +12,11 @@ STAGE_REGISTRY: dict[str, StageService] = {
     KfiaReferenceBronzeStage.stage_key: KfiaReferenceBronzeStage(),
     KfiaReferenceSilverStage.stage_key: KfiaReferenceSilverStage(),
     KurlyKfiaReconcileStage.stage_key: KurlyKfiaReconcileStage(),
+    GoldFreshnessPublishStage.stage_key: GoldFreshnessPublishStage(),
 }
 
 __all__ = [
+    "GoldFreshnessPublishStage",
     "KfiaReferenceBronzeStage",
     "KfiaReferenceSilverStage",
     "KurlyBronzeStage",

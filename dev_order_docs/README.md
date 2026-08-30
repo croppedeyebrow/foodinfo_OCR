@@ -27,8 +27,8 @@
 | 6 | `06_kurly_bronze_silver.md` | DONE | 컬리 Bronze·Silver |
 | 7 | `07_kfia_reference_pipeline.md` (+ `07a_kfia_native_csv_contract_adapter.md`) | DONE | KFIA Reference Bronze·Silver |
 | 8 | `08_reconciliation_quality.md` | DONE | 컬리–KFIA 대조·품질검토 |
-| 9 | `09_gold_lineage_results.md` | READY | Gold·계보·결과 UI |
-| 10 | `10_backend_publish.md` | BLOCKED | Backend 전달 계약 |
+| 9 | `09_gold_lineage_results.md` | DONE | Gold·계보·결과 UI |
+| 10 | `10_backend_publish.md` | READY | Backend 전달 계약 |
 | 11 | `11_final_integration.md` | BLOCKED | Dagster 제거·Docker·E2E |
 
 한 번에 하나의 `READY` 또는 `IN_PROGRESS` 단계만 수행한다. 선행 단계가 완료되기 전에 후속 단계를 구현하지 않는다.

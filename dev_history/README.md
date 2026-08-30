@@ -27,12 +27,12 @@
 | 6 | `06_kurly_bronze_silver.md` | [`06_kurly_bronze_silver.md`](06_kurly_bronze_silver.md) | DONE |
 | 7 | `07_kfia_reference_pipeline.md`, `07a_kfia_native_csv_contract_adapter.md` | [`07_kfia_reference_pipeline.md`](07_kfia_reference_pipeline.md) | DONE |
 | 8 | `08_reconciliation_quality.md` | [`08_reconciliation_quality.md`](08_reconciliation_quality.md) | DONE |
-| 9 | `09_gold_lineage_results.md` | — | READY |
-| 10 | `10_backend_publish.md` | — | BLOCKED |
+| 9 | `09_gold_lineage_results.md` | [`09_gold_lineage_results.md`](09_gold_lineage_results.md) | DONE |
+| 10 | `10_backend_publish.md` | — | READY |
 | 11 | `11_final_integration.md` | — | BLOCKED |
 
 ## 다음 작업
 
-현재 **9단계** [`09_gold_lineage_results.md`](../dev_order_docs/09_gold_lineage_results.md) — Gold·계보·결과 UI.
+현재 **10단계** [`10_backend_publish.md`](../dev_order_docs/10_backend_publish.md) — Backend 전달 계약.
 
 새 단계 완료 시 [`_template.md`](_template.md)를 복사해 번호에 맞는 파일을 작성한다.

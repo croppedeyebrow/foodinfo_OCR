@@ -181,3 +181,23 @@ def append_reconciliation_decision(
         )
 
     return run_with_normalizer_import(_run)
+
+
+def build_results_summary(*, data_root: Path, pair_id: str) -> dict:
+    def _run():
+        from src.gold_transform import build_results_summary as _build
+
+        return _build(data_root, pair_id)
+
+    return run_with_normalizer_import(_run)
+
+
+def load_lineage_for_gold_record(
+    *, data_root: Path, pair_id: str, gold_record_id: str
+) -> dict | None:
+    def _run():
+        from src.gold_transform import load_lineage_for_gold_record as _load
+
+        return _load(data_root, pair_id, gold_record_id)
+
+    return run_with_normalizer_import(_run)

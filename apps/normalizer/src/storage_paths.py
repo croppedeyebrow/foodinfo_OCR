@@ -17,6 +17,7 @@ LAYER_DIRS = (
     "reconciled",
     "reconciled/mappings",
     "gold",
+    "gold/freshness_profiles",
     "quarantine",
 )
 
@@ -52,6 +53,10 @@ def silver_batch_dir(data_root: Path, source: str, batch_id: str) -> Path:
 
 def gold_dataset_dir(data_root: Path, dataset: str, version: str) -> Path:
     return data_root / "gold" / dataset / version
+
+
+def gold_freshness_profiles_dir(data_root: Path, dataset_version: str) -> Path:
+    return gold_dataset_dir(data_root, "freshness_profiles", dataset_version)
 
 
 def quarantine_run_dir(data_root: Path, run_id: str) -> Path:
