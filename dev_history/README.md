@@ -25,14 +25,14 @@
 | 4 | `04_operator_submission_ui.md` | [`04_operator_submission_ui.md`](04_operator_submission_ui.md) | DONE |
 | 5 | `05_pipeline_ui_foundation.md` | [`05_pipeline_ui_foundation.md`](05_pipeline_ui_foundation.md) | DONE |
 | 6 | `06_kurly_bronze_silver.md` | [`06_kurly_bronze_silver.md`](06_kurly_bronze_silver.md) | DONE |
-| 7 | `07_kfia_reference_pipeline.md` | — | READY |
-| 8 | `08_reconciliation_quality.md` | — | BLOCKED |
+| 7 | `07_kfia_reference_pipeline.md`, `07a_kfia_native_csv_contract_adapter.md` | [`07_kfia_reference_pipeline.md`](07_kfia_reference_pipeline.md) | DONE |
+| 8 | `08_reconciliation_quality.md` | — | READY |
 | 9 | `09_gold_lineage_results.md` | — | BLOCKED |
 | 10 | `10_backend_publish.md` | — | BLOCKED |
 | 11 | `11_final_integration.md` | — | BLOCKED |
 
 ## 다음 작업
 
-현재 **7단계** [`07_kfia_reference_pipeline.md`](../dev_order_docs/07_kfia_reference_pipeline.md) — KFIA Reference Bronze·Silver.
+현재 **8단계** [`08_reconciliation_quality.md`](../dev_order_docs/08_reconciliation_quality.md) — 컬리–KFIA 대조·품질검토.
 
 새 단계 완료 시 [`_template.md`](_template.md)를 복사해 번호에 맞는 파일을 작성한다.

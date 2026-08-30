@@ -1,0 +1,3 @@
+product_code,food_type,food_name,storage_method_raw,shelf_life_value,shelf_life_unit,shelf_life_basis,expiration_info_raw,source_pdf,page_number,raw_text
+A001,빵류,식빵,냉동 보관,30,일,제조일,제조일로부터 30일,/data/ref/bread.pdf,12,제조일로부터 30일 냉동보관
+A002,음료,우유,냉장 보관,7,일,제조일,제조일로부터 7일,/data/ref/milk.pdf,3,제조일로부터 7일 냉장보관

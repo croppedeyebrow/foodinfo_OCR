@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neulsom.local/schemas/kfia-native-export-1.0.0.json",
+  "title": "KFIA native export validation summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "row_count",
+    "columns",
+    "required_columns_present",
+    "verdict"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "row_count": { "type": "integer", "minimum": 1 },
+    "columns": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "required_columns_present": { "type": "boolean" },
+    "missing_columns": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "verdict": { "type": "string", "minLength": 1 },
+    "export_checksum": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

@@ -4,16 +4,19 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from .auth import is_operator, resolve_operator_batch
+from .auth import is_operator, resolve_operator_batch, resolve_operator_dataset
 from .config import get_settings
 from .pipeline_gateway import (
     get_pipeline_service,
+    is_reference_dataset_conflict,
     pipeline_error_response,
+    register_reference_dataset,
     schedule_run_execution,
+    validate_reference_dataset,
 )
 from .runner import (
     JobRunner,
@@ -354,12 +357,122 @@ def _layer_manifest(data_root: Path, layer: str, batch_id: str) -> dict | None:
 
 def _pipeline_stage_keys() -> list[dict[str, str]]:
     service = get_pipeline_service()
-    hidden = {"fixture_echo"}
-    return [
-        item
-        for item in service.list_stage_keys()
-        if item["stage_key"] not in hidden
-    ]
+    return service.list_stage_keys(stage_key_prefix="kurly_")
+
+
+def _reference_stage_keys() -> list[dict[str, str]]:
+    service = get_pipeline_service()
+    return service.list_stage_keys(stage_key_prefix="kfia_")
+
+
+def _reference_datasets() -> list[str]:
+    settings = get_settings()
+    inbox_root = settings.datasets_root / "reference" / "inbox"
+    if not inbox_root.is_dir():
+        return []
+    versions: list[str] = []
+    for child in sorted(inbox_root.iterdir()):
+        if child.is_dir() and (child / "manifest.json").is_file():
+            versions.append(child.name)
+    return versions
+
+
+def _reference_manifest(data_root: Path, dataset_version: str) -> dict | None:
+    path = data_root / "reference" / "inbox" / dataset_version / "manifest.json"
+    if not path.is_file():
+        return None
+    import json
+
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _kfia_layer_manifest(data_root: Path, layer: str, dataset_version: str) -> dict | None:
+    if layer == "bronze":
+        path = data_root / "bronze" / "kfia" / dataset_version / "manifest.json"
+    elif layer == "silver":
+        path = data_root / "silver" / "kfia" / dataset_version / "manifest.json"
+    else:
+        return None
+    if not path.is_file():
+        return None
+    import json
+
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _resolve_pipeline_scope(batch_id: str, stage_key: str) -> tuple[str, str]:
+    if stage_key.startswith("kfia_"):
+        return resolve_operator_dataset(batch_id)
+    return resolve_operator_batch(batch_id)
+
+
+@app.get("/steps/reference", response_model=None)
+def step_reference(
+    request: Request,
+    dataset_version: str | None = None,
+) -> HTMLResponse | RedirectResponse:
+    redirect = _operator_redirect()
+    if redirect is not None:
+        return redirect
+    settings = get_settings()
+    datasets = _reference_datasets()
+    selected = dataset_version or (datasets[-1] if datasets else "")
+    status_payload = None
+    stages: list[dict[str, str]] = []
+    reference_manifest = None
+    bronze_summary = None
+    silver_summary = None
+    if selected:
+        try:
+            resolve_operator_dataset(selected, settings=settings)
+            service = get_pipeline_service()
+            status_payload = service.get_batch_status(
+                selected, stage_key_prefix="kfia_"
+            )
+            stages = _reference_stage_keys()
+            reference_manifest = _reference_manifest(settings.datasets_root, selected)
+            bronze_summary = _kfia_layer_manifest(
+                settings.datasets_root, "bronze", selected
+            )
+            silver_summary = _kfia_layer_manifest(
+                settings.datasets_root, "silver", selected
+            )
+        except Exception as error:
+            status_payload = {"error": str(error)}
+    context = _base_context("reference")
+    context.update(
+        {
+            "reference_datasets": datasets,
+            "selected_dataset": selected,
+            "reference_status": status_payload,
+            "reference_stages": stages,
+            "reference_manifest": reference_manifest,
+            "bronze_summary": bronze_summary,
+            "silver_summary": silver_summary,
+            "suggested_dataset_version": f"KFIA-{datetime.now(KST).strftime('%Y-%m')}",
+        }
+    )
+    return templates.TemplateResponse(request, "step_reference.html", context)
+
+
+@app.get("/steps/reference/partials/status/{dataset_version}", response_class=HTMLResponse)
+def reference_status_partial(request: Request, dataset_version: str) -> HTMLResponse:
+    redirect = _operator_redirect()
+    if redirect is not None:
+        return HTMLResponse("권한 없음", status_code=403)
+    try:
+        resolve_operator_dataset(dataset_version)
+    except ValueError as error:
+        return HTMLResponse(str(error), status_code=400)
+    service = get_pipeline_service()
+    reference_status = service.get_batch_status(
+        dataset_version, stage_key_prefix="kfia_"
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/pipeline_status.html",
+        {"pipeline_status": reference_status},
+    )
 
 
 @app.get("/steps/pipeline", response_model=None)
@@ -381,7 +494,7 @@ def step_pipeline(
         try:
             resolve_operator_batch(selected, settings=settings)
             service = get_pipeline_service()
-            status_payload = service.get_batch_status(selected)
+            status_payload = service.get_batch_status(selected, stage_key_prefix="kurly_")
             stages = _pipeline_stage_keys()
             if not stages:
                 raise RuntimeError(
@@ -426,7 +539,7 @@ def pipeline_status_partial(request: Request, batch_id: str) -> HTMLResponse:
     except ValueError as error:
         return HTMLResponse(str(error), status_code=400)
     service = get_pipeline_service()
-    pipeline_status = service.get_batch_status(batch_id)
+    pipeline_status = service.get_batch_status(batch_id, stage_key_prefix="kurly_")
     return templates.TemplateResponse(
         request,
         "partials/pipeline_status.html",
@@ -586,11 +699,69 @@ def _require_operator_api() -> None:
         raise HTTPException(status_code=403, detail="OPERATOR role required")
 
 
+@app.post("/api/reference/datasets/{dataset_version}/register")
+async def api_reference_register(
+    dataset_version: str,
+    export_file: UploadFile = File(...),
+) -> dict:
+    _require_operator_api()
+    try:
+        _dataset_version, _member = resolve_operator_dataset(dataset_version)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    settings = get_settings()
+    import tempfile
+
+    suffix = Path(export_file.filename or "export.csv").suffix or ".csv"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temporary:
+        content = await export_file.read()
+        temporary.write(content)
+        temp_path = Path(temporary.name)
+    try:
+        result = register_reference_dataset(
+            data_root=settings.datasets_root,
+            dataset_version=_dataset_version,
+            export_path=temp_path,
+            registered_by=settings.console_operator,
+        )
+        return {
+            "dataset_version": result.dataset_version,
+            "row_count": result.row_count,
+            "duplicate": result.duplicate,
+            "manifest": result.manifest,
+        }
+    except Exception as error:
+        if is_reference_dataset_conflict(error):
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        status_code, payload = pipeline_error_response(error)
+        raise HTTPException(status_code=status_code, detail=payload) from error
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
+@app.post("/api/reference/datasets/{dataset_version}/validate")
+def api_reference_validate(dataset_version: str) -> dict:
+    _require_operator_api()
+    try:
+        _dataset_version, _member = resolve_operator_dataset(dataset_version)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    settings = get_settings()
+    try:
+        return validate_reference_dataset(
+            data_root=settings.datasets_root,
+            dataset_version=_dataset_version,
+        )
+    except Exception as error:
+        status_code, payload = pipeline_error_response(error)
+        raise HTTPException(status_code=status_code, detail=payload) from error
+
+
 @app.post("/api/pipeline/batches/{batch_id}/stages/{stage_key}/runs")
 def api_pipeline_start_run(batch_id: str, stage_key: str) -> dict:
     _require_operator_api()
     try:
-        _batch_id, member = resolve_operator_batch(batch_id)
+        _batch_id, member = _resolve_pipeline_scope(batch_id, stage_key)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     try:
@@ -636,8 +807,12 @@ def api_pipeline_retry_run(run_id: str) -> dict:
     if snapshot is None:
         raise HTTPException(status_code=404, detail="run not found")
     batch_id = str(snapshot.get("batch_id") or "")
+    stage_key = ""
+    steps = snapshot.get("steps") or []
+    if steps:
+        stage_key = str(steps[-1].get("step_key") or "")
     try:
-        _batch_id, member = resolve_operator_batch(batch_id)
+        _batch_id, member = _resolve_pipeline_scope(batch_id, stage_key)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     try:

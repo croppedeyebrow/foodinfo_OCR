@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neulsom.local/schemas/kfia-reference-manifest-1.0.0.json",
+  "title": "KFIA reference dataset manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "dataset_version",
+    "source",
+    "parser_version",
+    "registered_by",
+    "registered_at",
+    "status",
+    "export_filename",
+    "export_checksum",
+    "row_count"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "dataset_version": { "type": "string", "minLength": 1 },
+    "source": { "const": "KFIA_REFERENCE" },
+    "parser_version": { "type": "string", "minLength": 1 },
+    "registered_by": { "type": "string", "minLength": 1 },
+    "registered_at": { "type": "string", "format": "date-time" },
+    "status": {
+      "type": "string",
+      "enum": ["REGISTERED", "VALIDATED", "REJECTED"]
+    },
+    "export_filename": { "type": "string", "minLength": 1 },
+    "export_checksum": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "row_count": { "type": "integer", "minimum": 0 },
+    "validation_status": { "type": ["string", "null"] },
+    "duplicate": { "type": "boolean" }
+  }
+}

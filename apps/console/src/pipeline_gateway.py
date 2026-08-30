@@ -3,11 +3,14 @@ from __future__ import annotations
 import os
 import sys
 import threading
+from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from .config import get_settings
+
+T = TypeVar("T")
 
 _EXECUTOR_LOCK = threading.Lock()
 _ACTIVE_RUNS: set[str] = set()
@@ -38,12 +41,8 @@ def _ensure_normalizer_src() -> Path:
     raise RuntimeError("normalizer src path not found for PipelineService")
 
 
-def clear_pipeline_service_cache() -> None:
-    get_pipeline_service.cache_clear()
-
-
-def _import_normalizer_pipeline():
-    """Load normalizer_pipeline without clobbering the console ``src`` package."""
+def run_with_normalizer_import(callback: Callable[[], T]) -> T:
+    """Run a callback that imports normalizer ``src`` without clobbering console ``src``."""
     _ensure_normalizer_src()
     saved_modules = {
         name: module
@@ -53,15 +52,28 @@ def _import_normalizer_pipeline():
     for name in saved_modules:
         del sys.modules[name]
     try:
-        from src.normalizer_pipeline.service import PipelineService
-        from src.normalizer_pipeline.store import build_pipeline_store
-
-        return PipelineService, build_pipeline_store
+        return callback()
     finally:
         for name in list(sys.modules):
             if name == "src" or name.startswith("src."):
                 del sys.modules[name]
         sys.modules.update(saved_modules)
+
+
+def clear_pipeline_service_cache() -> None:
+    get_pipeline_service.cache_clear()
+
+
+def _import_normalizer_pipeline():
+    """Load normalizer_pipeline without clobbering the console ``src`` package."""
+
+    def _load():
+        from src.normalizer_pipeline.service import PipelineService
+        from src.normalizer_pipeline.store import build_pipeline_store
+
+        return PipelineService, build_pipeline_store
+
+    return run_with_normalizer_import(_load)
 
 
 @lru_cache(maxsize=1)
@@ -101,3 +113,53 @@ def schedule_run_execution(*, run_id: str, member: str) -> None:
 def pipeline_error_response(error: Exception) -> tuple[int, dict[str, Any]]:
     code = getattr(error, "error_code", "PIPELINE_ERROR")
     return 400, {"error_code": code, "message": str(error)}
+
+
+def register_reference_dataset(
+    *,
+    data_root: Path,
+    dataset_version: str,
+    export_path: Path,
+    registered_by: str,
+) -> Any:
+    def _run():
+        from src.reference_registration import (
+            default_reference_parser_version,
+            register_reference_export,
+        )
+
+        return register_reference_export(
+            data_root=data_root,
+            dataset_version=dataset_version,
+            export_path=export_path,
+            registered_by=registered_by,
+            parser_version=default_reference_parser_version(),
+        )
+
+    return run_with_normalizer_import(_run)
+
+
+def validate_reference_dataset(
+    *,
+    data_root: Path,
+    dataset_version: str,
+) -> dict[str, Any]:
+    def _run():
+        from src.kfia_export_columns import EXPORT_FILENAME
+        from src.reference_registration import (
+            mark_reference_validated,
+            validate_reference_export,
+        )
+
+        export_path = (
+            data_root / "reference" / "inbox" / dataset_version / EXPORT_FILENAME
+        )
+        validation = validate_reference_export(export_path)
+        manifest = mark_reference_validated(data_root, dataset_version)
+        return {"validation": validation, "manifest": manifest}
+
+    return run_with_normalizer_import(_run)
+
+
+def is_reference_dataset_conflict(error: Exception) -> bool:
+    return type(error).__name__ == "DatasetVersionConflictError"

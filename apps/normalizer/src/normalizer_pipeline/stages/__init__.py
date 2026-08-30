@@ -1,16 +1,19 @@
 from .base import StageContext, StageExecutionResult, StageService
-from .fixture_echo import FixtureEchoStage
+from .kfia_reference_bronze import KfiaReferenceBronzeStage
+from .kfia_reference_silver import KfiaReferenceSilverStage
 from .kurly_bronze import KurlyBronzeStage
 from .kurly_silver import KurlySilverStage
 
 STAGE_REGISTRY: dict[str, StageService] = {
     KurlyBronzeStage.stage_key: KurlyBronzeStage(),
     KurlySilverStage.stage_key: KurlySilverStage(),
-    FixtureEchoStage.stage_key: FixtureEchoStage(),
+    KfiaReferenceBronzeStage.stage_key: KfiaReferenceBronzeStage(),
+    KfiaReferenceSilverStage.stage_key: KfiaReferenceSilverStage(),
 }
 
 __all__ = [
-    "FixtureEchoStage",
+    "KfiaReferenceBronzeStage",
+    "KfiaReferenceSilverStage",
     "KurlyBronzeStage",
     "KurlySilverStage",
     "STAGE_REGISTRY",

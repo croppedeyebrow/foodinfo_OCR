@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}7. KFIA 기준 · Pipeline Console{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>7단계 · KFIA Reference 등록·Stage 실행</h1>
+  <p class="lead">
+    <code>ref_data_parser</code>가 생성한 <code>shelf_life_output.csv</code>를 버전 단위로 등록하고
+    Reference Bronze·Silver Stage를 실행합니다.
+  </p>
+
+  <form id="reference-register-form" class="panel" style="background:#f8fafb; margin-bottom:1rem;">
+    <h2 style="margin-top:0; font-size:1.05rem;">기준 데이터 등록</h2>
+    <label for="dataset_version">dataset version</label>
+    <input
+      id="dataset_version"
+      name="dataset_version"
+      value="{{ selected_dataset or suggested_dataset_version }}"
+      placeholder="KFIA-2026-08"
+    />
+    <label for="export_file">기준 데이터 파일 (shelf_life_output.csv)</label>
+    <input id="export_file" name="export_file" type="file" accept=".csv,text/csv" />
+    <div class="actions">
+      <button type="button" id="reference-register-btn">등록</button>
+      <button type="button" id="reference-validate-btn">계약 검증</button>
+    </div>
+    <p id="reference-register-message" class="hint" style="margin-bottom:0;"></p>
+  </form>
+
+  {% if reference_datasets %}
+  <form method="get" action="/steps/reference" class="actions" style="margin-bottom:1rem;">
+    <label>
+      등록된 dataset
+      <select name="dataset_version" onchange="this.form.submit()">
+        {% for version in reference_datasets %}
+        <option value="{{ version }}" {% if version == selected_dataset %}selected{% endif %}>
+          {{ version }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+  {% endif %}
+
+  {% if selected_dataset and reference_status and not reference_status.error %}
+  {% if reference_manifest %}
+  <div class="panel" style="margin-bottom:1rem;">
+    <h2 style="margin-top:0; font-size:1.05rem;">등록 manifest</h2>
+    <p class="hint" style="margin:0;">
+      상태 {{ reference_manifest.status }} · 행 {{ reference_manifest.row_count }}건 ·
+      checksum <code>{{ reference_manifest.export_checksum[:12] }}…</code>
+    </p>
+  </div>
+  {% endif %}
+
+  <div
+    id="pipeline-status-panel"
+    hx-get="/steps/reference/partials/status/{{ selected_dataset }}"
+    hx-trigger="load, every 2s"
+    hx-swap="innerHTML"
+  >
+    {% with pipeline_status=reference_status %}
+    {% include "partials/pipeline_status.html" %}
+    {% endwith %}
+  </div>
+
+  <div class="actions" style="margin-top:1rem;">
+  {% for stage in reference_stages %}
+    <button
+      type="button"
+      class="btn pipeline-run-btn"
+      data-batch-id="{{ selected_dataset }}"
+      data-stage-key="{{ stage.stage_key }}"
+    >{{ stage.display_name }} 실행</button>
+  {% endfor %}
+  </div>
+  <p id="pipeline-action-message" class="hint" style="margin-top:0.75rem;"></p>
+
+  {% if bronze_summary %}
+  <div class="panel" style="margin-top:1rem;">
+    <h2>Reference Bronze 요약</h2>
+    <p class="hint">
+      입력 {{ bronze_summary.input_count }}건 · 정상 {{ bronze_summary.valid_count }}건 ·
+      격리 {{ bronze_summary.quarantine_count }}건
+    </p>
+  </div>
+  {% endif %}
+
+  {% if silver_summary %}
+  <div class="panel" style="margin-top:1rem;">
+    <h2>Reference Silver 요약</h2>
+    <p class="hint">
+      레코드 {{ silver_summary.record_count }}건 · 승인
+      {{ silver_summary.approved_count }}건 · 검토
+      {{ silver_summary.review_required_count }}건 · 거절
+      {{ silver_summary.rejected_count }}건
+    </p>
+  </div>
+  {% endif %}
+  {% elif reference_status and reference_status.error %}
+  <div class="error" style="margin-top:1rem;">
+    <p><strong>Reference 상태를 불러오지 못했습니다.</strong></p>
+    <p>{{ reference_status.error }}</p>
+  </div>
+  {% elif not reference_datasets %}
+  <p class="hint">등록된 KFIA dataset이 없습니다. 위 폼에서 export CSV를 등록하세요.</p>
+  {% endif %}
+</section>
+
+<script>
+(function () {
+  const registerBtn = document.getElementById("reference-register-btn");
+  const validateBtn = document.getElementById("reference-validate-btn");
+  const registerMessage = document.getElementById("reference-register-message");
+  const datasetInput = document.getElementById("dataset_version");
+  const fileInput = document.getElementById("export_file");
+
+  async function readResponsePayload(response) {
+    const text = await response.text();
+    if (!text) return {};
+    try {
+      return JSON.parse(text);
+    } catch (_error) {
+      return { detail: text };
+    }
+  }
+
+  async function postRegister() {
+    const datasetVersion = datasetInput?.value?.trim();
+    const file = fileInput?.files?.[0];
+    if (!datasetVersion || !file) {
+      if (registerMessage) registerMessage.textContent = "dataset version과 파일을 입력하세요.";
+      return;
+    }
+    const formData = new FormData();
+    formData.append("export_file", file);
+    if (registerMessage) registerMessage.textContent = "등록 중...";
+    const response = await fetch(
+      `/api/reference/datasets/${encodeURIComponent(datasetVersion)}/register`,
+      { method: "POST", body: formData }
+    );
+    const payload = await readResponsePayload(response);
+    if (!response.ok) {
+      const detail = payload.detail || payload;
+      const text = typeof detail === "string" ? detail : detail.message || JSON.stringify(detail);
+      if (registerMessage) registerMessage.textContent = text;
+      return;
+    }
+    if (registerMessage) {
+      registerMessage.textContent = payload.duplicate
+        ? `이미 등록된 checksum입니다 (${payload.row_count}건).`
+        : `등록 완료 (${payload.row_count}건).`;
+    }
+    window.location.href = `/steps/reference?dataset_version=${encodeURIComponent(datasetVersion)}`;
+  }
+
+  async function postValidate() {
+    const datasetVersion = datasetInput?.value?.trim() || "{{ selected_dataset }}";
+    if (!datasetVersion) {
+      if (registerMessage) registerMessage.textContent = "dataset version을 입력하세요.";
+      return;
+    }
+    if (registerMessage) registerMessage.textContent = "계약 검증 중...";
+    const response = await fetch(
+      `/api/reference/datasets/${encodeURIComponent(datasetVersion)}/validate`,
+      { method: "POST" }
+    );
+    const payload = await readResponsePayload(response);
+    if (!response.ok) {
+      const detail = payload.detail || payload;
+      const text = typeof detail === "string" ? detail : detail.message || JSON.stringify(detail);
+      if (registerMessage) registerMessage.textContent = text;
+      return;
+    }
+    if (registerMessage) {
+      const verdict = payload.validation?.verdict || payload.manifest?.status;
+      const checks = payload.validation?.checks || {};
+      const checkLines = Object.entries(checks)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(" · ");
+      registerMessage.textContent = `${verdict} (${payload.validation?.row_count || 0}행)${checkLines ? " · " + checkLines : ""}`;
+    }
+    window.location.reload();
+  }
+
+  registerBtn?.addEventListener("click", () => { postRegister().catch((e) => {
+    if (registerMessage) registerMessage.textContent = String(e);
+  }); });
+  validateBtn?.addEventListener("click", () => { postValidate().catch((e) => {
+    if (registerMessage) registerMessage.textContent = String(e);
+  }); });
+
+  const message = document.getElementById("pipeline-action-message");
+  document.querySelectorAll(".pipeline-run-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const batchId = button.dataset.batchId;
+      const stageKey = button.dataset.stageKey;
+      if (!batchId || !stageKey) return;
+      button.disabled = true;
+      if (message) message.textContent = "run 생성 중...";
+      try {
+        const response = await fetch(
+          `/api/pipeline/batches/${encodeURIComponent(batchId)}/stages/${encodeURIComponent(stageKey)}/runs`,
+          { method: "POST" }
+        );
+        const payload = await readResponsePayload(response);
+        if (!response.ok) {
+          const detail = payload.detail || payload;
+          const text = typeof detail === "string"
+            ? detail
+            : detail.message || JSON.stringify(detail);
+          if (message) message.textContent = text;
+          return;
+        }
+        if (message) {
+          message.textContent = `run 시작: ${payload.run_id} (${payload.status})`;
+        }
+        const panel = document.getElementById("pipeline-status-panel");
+        if (panel) htmx.trigger(panel, "load");
+      } catch (error) {
+        if (message) message.textContent = String(error);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

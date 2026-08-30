@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_version": "KFIA-2026-08",
+  "source": "KFIA_REFERENCE",
+  "parser_version": "dev",
+  "registered_by": "jaeseong",
+  "registered_at": "2026-08-30T16:18:53.600953+09:00",
+  "status": "VALIDATED",
+  "export_filename": "shelf_life_output.csv",
+  "export_checksum": "5069cc3404b404b14aaeb99c43385f29b8ea9f014b23236a35eedd47420d0c25",
+  "row_count": 963,
+  "validation_status": "OK",
+  "duplicate": false
+}

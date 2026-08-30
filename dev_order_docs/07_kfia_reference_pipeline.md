@@ -41,3 +41,11 @@ parser version    [commit/tag]
 - 같은 dataset version과 checksum은 중복 등록되지 않는다.
 - 원본 PDF 경로·페이지·원래 단위가 추적된다.
 - `ref_data_parser` 변경 없이 versioned export 경계로 연결된다.
+
+## 완료 보충 (2026-08-30)
+
+실제 `ref_data_parser` native CSV 형식 반영은 [`07a_kfia_native_csv_contract_adapter.md`](07a_kfia_native_csv_contract_adapter.md)에서 수행했다. 구현·운영 검증 내역은 [`dev_history/07_kfia_reference_pipeline.md`](../dev_history/07_kfia_reference_pipeline.md)를 참고한다.
+
+- `parser_version` UI 입력 제거 → `PIPELINE_CODE_VERSION` 자동 기록
+- Bronze/Silver 계약: `kfia_reference_bronze` / `kfia_reference_silver` (Kurly `normalized_freshness`와 분리)
+- 운영 검증 `KFIA-2026-08`: Bronze 963/963, Silver 승인 874·검토 89·거절 0

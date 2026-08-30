@@ -8,6 +8,9 @@ import pytest
 from conftest import _clear_src_modules, use_app, use_console
 
 CONSOLE_ROOT = Path(__file__).resolve().parents[1] / "apps" / "console"
+NATIVE_SAMPLE = (
+    Path(__file__).resolve().parent / "fixtures" / "kfia" / "shelf_life_output.native.sample.csv"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -467,7 +470,7 @@ def test_pipeline_api_start_and_status(
     clear_pipeline_service_cache()
     client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(app)
     response = client.post(
-        "/api/pipeline/batches/20260830-jaeseong-001/stages/fixture_echo/runs"
+        "/api/pipeline/batches/20260830-jaeseong-001/stages/kurly_bronze/runs"
     )
     assert response.status_code == 200, response.text
     payload = response.json()
@@ -478,6 +481,52 @@ def test_pipeline_api_start_and_status(
     assert body["batch_id"] == "20260830-jaeseong-001"
     get_settings.cache_clear()
     clear_pipeline_service_cache()
+
+
+def test_operator_can_open_reference_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.config import get_settings
+    from src.main import app
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("CONSOLE_ROLE", "OPERATOR")
+    monkeypatch.setenv("CONSOLE_OPERATOR", "jaeseong")
+    client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(app)
+    response = client.get("/steps/reference")
+    assert response.status_code == 200
+    assert "KFIA Reference" in response.text
+    get_settings.cache_clear()
+
+
+def test_reference_register_and_validate_api(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from src.config import get_settings
+    from src.main import app
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("CONSOLE_ROLE", "OPERATOR")
+    monkeypatch.setenv("CONSOLE_OPERATOR", "jaeseong")
+    monkeypatch.setenv("PIPELINE_CODE_VERSION", "dev")
+    monkeypatch.setenv("DATASETS_ROOT", str(tmp_path / "datasets"))
+    monkeypatch.setenv("OUTCOME_HOST_ROOT", str(tmp_path / "outcome"))
+
+    fixture = NATIVE_SAMPLE
+    client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(app)
+    with fixture.open("rb") as handle:
+        response = client.post(
+            "/api/reference/datasets/KFIA-2026-08/register",
+            data={},
+            files={"export_file": ("shelf_life_output.csv", handle, "text/csv")},
+        )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["row_count"] == 3
+    assert payload["manifest"]["parser_version"] == "dev"
+
+    validate = client.post("/api/reference/datasets/KFIA-2026-08/validate")
+    assert validate.status_code == 200, validate.text
+    assert validate.json()["manifest"]["status"] == "VALIDATED"
+    get_settings.cache_clear()
 
 
 def test_platform_redirects_to_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:

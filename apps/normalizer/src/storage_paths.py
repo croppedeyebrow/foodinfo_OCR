@@ -11,6 +11,7 @@ LAYER_DIRS = (
     "detail_images",
     "ocr_raw",
     "inbox/accepted",
+    "reference/inbox",
     "bronze",
     "silver",
     "gold",
@@ -33,6 +34,10 @@ def discovery_batch_dir(data_root: Path, batch_id: str) -> Path:
 
 def accepted_inbox_dir(data_root: Path, batch_id: str) -> Path:
     return data_root / "inbox" / "accepted" / batch_id
+
+
+def reference_inbox_dir(data_root: Path, dataset_version: str) -> Path:
+    return data_root / "reference" / "inbox" / dataset_version
 
 
 def bronze_batch_dir(data_root: Path, source: str, batch_id: str) -> Path:

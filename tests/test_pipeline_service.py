@@ -58,7 +58,7 @@ def _accepted_batch(tmp_path: Path) -> tuple[Path, Path]:
     return data_root, outcome_root
 
 
-def test_fixture_stage_runs_end_to_end(normalizer_src: Path, tmp_path: Path) -> None:
+def test_kurly_bronze_stage_runs_end_to_end(normalizer_src: Path, tmp_path: Path) -> None:
     from src.normalizer_pipeline.service import PipelineService
     from src.normalizer_pipeline.store import InMemoryPipelineStore
 
@@ -72,16 +72,16 @@ def test_fixture_stage_runs_end_to_end(normalizer_src: Path, tmp_path: Path) -> 
     snapshot = service.start_run(
         batch_id=BATCH_ID,
         member=MEMBER,
-        stage_key="fixture_echo",
+        stage_key="kurly_bronze",
     )
     assert snapshot["status"] == "PENDING"
     final = service.execute_run(snapshot["run_id"], member=MEMBER)
     assert final["status"] == "SUCCEEDED"
-    assert final["progress"]["output_count"] == 1
-    artifact_path = data_root / "pipeline" / "fixture" / BATCH_ID / "echo.json"
-    assert artifact_path.is_file()
-    payload = json.loads(artifact_path.read_text(encoding="utf-8"))
-    assert payload["batch_id"] == BATCH_ID
+    assert final["progress"]["output_count"] == 2
+    manifest_path = data_root / "bronze" / "kurly" / BATCH_ID / "manifest.json"
+    assert manifest_path.is_file()
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert payload["valid_count"] == 2
 
 
 def test_duplicate_run_is_rejected(normalizer_src: Path, tmp_path: Path) -> None:
@@ -99,13 +99,13 @@ def test_duplicate_run_is_rejected(normalizer_src: Path, tmp_path: Path) -> None
     first = service.start_run(
         batch_id=BATCH_ID,
         member=MEMBER,
-        stage_key="fixture_echo",
+        stage_key="kurly_bronze",
     )
     with pytest.raises(DuplicateRunError):
         service.start_run(
             batch_id=BATCH_ID,
             member=MEMBER,
-            stage_key="fixture_echo",
+            stage_key="kurly_bronze",
         )
     service.execute_run(first["run_id"], member=MEMBER)
 
@@ -114,18 +114,17 @@ def test_retry_after_failure_creates_new_attempt(
     normalizer_src: Path, tmp_path: Path
 ) -> None:
     from src.normalizer_pipeline.service import PipelineService
-    from src.normalizer_pipeline.stages.fixture_echo import FixtureEchoStage
+    from src.normalizer_pipeline.stages.base import StageExecutionResult
+    from src.normalizer_pipeline.stages.kurly_bronze import KurlyBronzeStage
     from src.normalizer_pipeline.store import InMemoryPipelineStore
 
     data_root, outcome_root = _accepted_batch(tmp_path)
 
-    class FailingStage(FixtureEchoStage):
+    class FailingStage(KurlyBronzeStage):
         def execute(self, context):
-            from src.normalizer_pipeline.stages.base import StageExecutionResult
-
             return StageExecutionResult(
                 failed_count=1,
-                error_code="FIXTURE_FAIL",
+                error_code="BRONZE_FAIL",
                 error_message="intentional failure",
             )
 
@@ -134,12 +133,12 @@ def test_retry_after_failure_creates_new_attempt(
         data_root=data_root,
         outcome_root=outcome_root,
         code_version="test",
-        stages={"fixture_echo": FailingStage()},
+        stages={"kurly_bronze": FailingStage()},
     )
     first = service.start_run(
         batch_id=BATCH_ID,
         member=MEMBER,
-        stage_key="fixture_echo",
+        stage_key="kurly_bronze",
     )
     failed = service.execute_run(first["run_id"], member=MEMBER)
     assert failed["status"] == "FAILED"

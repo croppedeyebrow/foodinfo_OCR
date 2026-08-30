@@ -223,10 +223,14 @@ class PipelineService:
             return None
         return self._present_run(snapshot)
 
-    def get_batch_status(self, batch_id: str) -> dict[str, Any]:
+    def get_batch_status(
+        self, batch_id: str, *, stage_key_prefix: str | None = None
+    ) -> dict[str, Any]:
         runs = self.store.list_runs(batch_id=batch_id, limit=200)
         stages: list[dict[str, Any]] = []
         for stage_key, stage in self.stages.items():
+            if stage_key_prefix and not stage_key.startswith(stage_key_prefix):
+                continue
             stage_runs = [
                 item
                 for item in runs
@@ -248,13 +252,14 @@ class PipelineService:
             )
         return {"batch_id": batch_id, "stages": stages}
 
-    def list_stage_keys(self) -> list[dict[str, str]]:
+    def list_stage_keys(self, *, stage_key_prefix: str | None = None) -> list[dict[str, str]]:
         return [
             {
                 "stage_key": stage.stage_key,
                 "display_name": stage.display_name,
             }
             for stage in self.stages.values()
+            if stage_key_prefix is None or stage.stage_key.startswith(stage_key_prefix)
         ]
 
     def _stage(self, stage_key: str) -> StageService:

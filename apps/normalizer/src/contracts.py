@@ -16,6 +16,10 @@ from .checksum import compute_content_hash, with_content_hash
 SUPPORTED_MAJOR = {
     "collection_submission": {1},
     "kurly_raw_product": {1},
+    "kfia_native_export": {1},
+    "kfia_reference_manifest": {1},
+    "kfia_reference_bronze": {1},
+    "kfia_reference_silver": {1},
     "mfds_raw_record": {1},
     "normalized_freshness": {1},
     "reconciled_freshness": {1},
@@ -26,6 +30,10 @@ SUPPORTED_MAJOR = {
 CONTRACT_SCHEMA_FILES = {
     "collection_submission": "collection_submission.schema.json",
     "kurly_raw_product": "kurly_raw_product.schema.json",
+    "kfia_reference_manifest": "kfia_reference_manifest.schema.json",
+    "kfia_native_export": "kfia_native_export.schema.json",
+    "kfia_reference_bronze": "kfia_reference_bronze.schema.json",
+    "kfia_reference_silver": "kfia_reference_silver.schema.json",
     "mfds_raw_record": "mfds_raw_record.schema.json",
     "normalized_freshness": "normalized_freshness.schema.json",
     "reconciled_freshness": "reconciled_freshness.schema.json",
